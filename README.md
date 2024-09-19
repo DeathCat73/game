@@ -21,11 +21,11 @@ To close the server:
 
 Have config.json in the same folder as client.py  
 config.json should look like this:  
-`{  
-    "HOST": "host IP",  
-    "PORT": port as integer (38491 unless otherwise specified),  
-    "NAME" "your username"  
-}`  
+`{`  
+`    "HOST": "host IP",`  
+`    "PORT": port as integer (38491 unless otherwise specified),`  
+`    "NAME" "your username"`  
+`}`  
 If config.json is not present in the same folder as client.py, it will be created  
 run client.py
 
