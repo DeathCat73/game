@@ -2,7 +2,7 @@
 simple multiplayer game using pygame
 
 
-To run a server:
+**To run a server:**
 
 Have banned.json in the same folder as server.py
 
@@ -13,7 +13,7 @@ Run server.py
 The server will start on port 38491
 
 
-To use a server:
+**To use a server:**
 
 Click on player names to kick them
 
@@ -28,7 +28,7 @@ To close the server:
     YOU WILL HAVE TO KILL THE PROCESS
 
 
-To run the client:
+**To run the client:**
 
 Have config.json in the same folder as client.py
 
@@ -49,7 +49,7 @@ If config.json is not present in the same folder as client.py, it will be create
 run client.py
 
 
-To use the client:
+**To use the client:**
 
 WASD to move
 
