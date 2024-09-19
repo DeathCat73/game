@@ -12,10 +12,10 @@ The server will start on port 38491
 
 Click on player names to kick them  
 To close the server:  
-- Close the window  
-- Press enter in the console  
-- IF DONE IN THE WRONG ORDER IT WILL NOT WORK  
-- YOU WILL HAVE TO KILL THE PROCESS  
+1. Close the window  
+2. Press enter in the console  
+**IF DONE IN THE WRONG ORDER IT WILL NOT WORK**  
+**YOU WILL HAVE TO KILL THE PROCESS**  
 
 ### To run the client:
 
@@ -24,7 +24,7 @@ config.json should look like this:
 `{`  
 `    "HOST": "host IP",`  
 `    "PORT": port as integer (38491 unless otherwise specified),`  
-`    "NAME" "your username"`  
+`    "NAME": "your username"`  
 `}`  
 If config.json is not present in the same folder as client.py, it will be created  
 run client.py
@@ -36,6 +36,7 @@ Click to shoot
 T to chat  
 - ENTER to send  
 - ESC to cancel  
+
 Health is in the top left  
 Rainbow squares are power-ups  
 ESC to quit
