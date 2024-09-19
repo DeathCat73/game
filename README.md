@@ -14,6 +14,7 @@ Click on player names to kick them
 To close the server:  
 1. Close the window  
 2. Press enter in the console  
+
 **IF DONE IN THE WRONG ORDER IT WILL NOT WORK**  
 **YOU WILL HAVE TO KILL THE PROCESS**  
 
