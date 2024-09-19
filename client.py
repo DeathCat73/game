@@ -92,7 +92,7 @@ if __name__ == "__main__":
         config = json.load(open("config.json", "rt"))
     except FileNotFoundError:
         with open("config.json", "wt") as f:
-            f.write('{\n    "HOST": "0.0.0.0",\n    "PORT": 12345,\n    "NAME": "Player"\n}')
+            f.write('{\n    "HOST": "0.0.0.0",\n    "PORT": 38491,\n    "NAME": "Player"\n}')
         print("config.json created. Open it and enter a host, port and username.")
         pg.quit()
         quit()
