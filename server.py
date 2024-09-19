@@ -59,6 +59,7 @@ class GameServer:
         self.hit_queue = []
         self.pw_queue = []
         self.send_queue = []
+        self.version = 1.0
 
     def chat(self, msg):
         print(msg)
@@ -132,7 +133,7 @@ class GameServer:
             self.threads[-1].start()
 
     def serve(self, conn, addr):
-        banned = json.load(open("banned.txt", "rt"))
+        banned = json.load(open("banned.json", "rt"))
         if addr[0] in banned:
             send(conn, ["BANNED", 1])
             return
@@ -147,6 +148,8 @@ class GameServer:
                             self.players[full_name] = msg[2]
                             self.chat(f"{name} joined.")
                             print(f"{full_name} joined")
+                            if msg[3] != self.version:
+                                send(conn, ["VERSION", self.version])
                         case "POS":
                             if full_name is not None:
                                 self.players[full_name] = msg[1]

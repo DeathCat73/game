@@ -117,6 +117,7 @@ if __name__ == "__main__":
     clock = pg.time.Clock()
     fonts = {size: pg.font.Font(None, size) for size in [32,48,64]}
 
+    VERSION = 1.0
     fps = 60
     speed = 300
     players = dict()
@@ -130,7 +131,7 @@ if __name__ == "__main__":
     killer = None
     left = False
 
-    send(json.dumps(["JOIN", plr.name, plr.pos]))
+    send(json.dumps(["JOIN", plr.name, plr.pos, VERSION]))
 
     while True:
         display.fill(0)
@@ -182,10 +183,13 @@ if __name__ == "__main__":
 
             send(json.dumps(["POS",plr.pos]))
 
-        for exit_type, exit_msg in zip(["BANNED", "KICK", "SHUTDOWN"], ["You are banned from the server.", "You have been kicked from the server.", "The server shut down."]):
+        for exit_type, exit_msg in zip(["BANNED", "KICK", "SHUTDOWN", "VERSION"], \
+                                       ["You are banned from the server.", "You have been kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}"]):
             if exit_type in recieved.keys() and not left:
                 left = True
                 send(json.dumps(["QUIT"]))
+                if exit_type == "VERSION":
+                    exit_msg = exit_msg.format(VERSION, recieved.get("VERSION", "unknown"))
                 print(exit_msg)
 
         if "QUIT" in recieved.keys():
@@ -246,7 +250,7 @@ if __name__ == "__main__":
             display.blit(text, (p[1][0]-text.get_rect().centerx, p[1][1]-50))
 
         for pw in pwups:
-            pg.draw.rect(display, np.array([255]) * colorsys.hsv_to_rgb((t/2+pw[0]/500)%1, 1, 1), [pw[0]-15,pw[1]-15,30,30])
+            pg.draw.rect(display, np.array([255]) * colorsys.hsv_to_rgb((t/2+pw[0]/2000)%1, 1, 1), [pw[0]-15,pw[1]-15,30,30])
 
         for pr in projs:
             pg.draw.rect(display, (255,)*3, [pr[0]-5,pr[1]-5,10,10])
