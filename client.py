@@ -119,7 +119,7 @@ if __name__ == "__main__":
     clock = pg.time.Clock()
     fonts = {size: pg.font.Font(None, size) for size in [32,48,64]}
 
-    VERSION = 1.0
+    VERSION = 1.1
     fps = 60
     speed = 300
     players = dict()

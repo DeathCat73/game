@@ -59,7 +59,7 @@ class GameServer:
         self.hit_queue = []
         self.pw_queue = []
         self.send_queue = []
-        self.version = 1.0
+        self.VERSION = 1.1
 
     def chat(self, msg):
         print(msg)
@@ -166,7 +166,7 @@ class GameServer:
                             self.chat(f"{name} joined.")
                             print(f"{full_name} joined")
                             if msg[3] != self.version:
-                                send(conn, ["VERSION", self.version])
+                                send(conn, ["VERSION", self.VERSION])
                         case "POS":
                             if full_name is not None:
                                 self.players[full_name] = msg[1]
