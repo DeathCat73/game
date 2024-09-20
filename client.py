@@ -74,8 +74,10 @@ def recieve():
         partial_item += data[0]
         for item in [partial_item] * bool(partial_item) + data[1:-1]:
             msg = json.loads(item)
+            #print(msg[0])
             recieved[msg[0]] = msg[1]
             if msg[0] == "QUIT":
+                print("recvd 2")
                 return
         partial_item = data[-1]
 
@@ -143,6 +145,9 @@ if __name__ == "__main__":
             if event.type == pg.QUIT:
                 left = True
                 send(json.dumps(["QUIT"]))
+                print("You left the server.")
+                pg.quit()
+                quit()
             elif event.type == pg.KEYDOWN:
                 if chatting:
                     if event.key == pg.K_ESCAPE:
@@ -161,6 +166,9 @@ if __name__ == "__main__":
                 elif event.key == pg.K_ESCAPE:
                     left = True
                     send(json.dumps(["QUIT"]))
+                    print("You left the server.")
+                    pg.quit()
+                    quit()
             elif event.type == pg.MOUSEBUTTONDOWN:
                 plr.shooting = True
             elif event.type == pg.MOUSEBUTTONUP:
@@ -184,18 +192,15 @@ if __name__ == "__main__":
             send(json.dumps(["POS",plr.pos]))
 
         for exit_type, exit_msg in zip(["BANNED", "KICK", "SHUTDOWN", "VERSION"], \
-                                       ["You are banned from the server.", "You have been kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}"]):
+            ["You are banned from the server.", "You have been kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}."]):
             if exit_type in recieved.keys() and not left:
                 left = True
                 send(json.dumps(["QUIT"]))
                 if exit_type == "VERSION":
                     exit_msg = exit_msg.format(VERSION, recieved.get("VERSION", "unknown"))
                 print(exit_msg)
-
-        if "QUIT" in recieved.keys():
-            print(f"You disconnected from the server.")
-            pg.quit()
-            quit()
+                pg.quit()
+                quit()
         
         players = recieved["players"]
         chat = recieved["chat"]

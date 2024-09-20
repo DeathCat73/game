@@ -53,7 +53,7 @@ class GameServer:
         self.threads = []
         self.sock = socket.create_server(("", port))
         self.players = dict()
-        self.chat_hist = ["Server started"]
+        self.chat_hist = ["SERVER: Started."]
         self.projectiles = []
         self.powerups = []
         self.hit_queue = []
@@ -69,7 +69,7 @@ class GameServer:
 
     def run_game(self):
         pg.init()
-        display = pg.display.set_mode((400, 300))
+        display = pg.display.set_mode((800, 400))
         clock = pg.time.Clock()
         font = pg.font.Font(None, 32)
         t = 0
@@ -82,7 +82,7 @@ class GameServer:
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
-                    self.chat("! SERVER STOPPING !")
+                    self.chat("! SERVER: STOPPING !")
                     pg.quit()
                     time.sleep(1)
                     for plr in self.players:
@@ -90,10 +90,16 @@ class GameServer:
                     print("game stopped")
                     return
                 elif event.type == pg.MOUSEBUTTONDOWN:
-                    plr = list(self.players.keys())[pg.mouse.get_pos()[1]//25]
-                    if event.button == 1:
-                        self.chat(f"{username(plr)} was kicked.")
-                        self.send_queue.append([plr, ["KICK", 1]])
+                    pos = pg.mouse.get_pos()
+                    if pos[0] < 400:
+                        plr = list(self.players.keys())[pos[1]//25-1]
+                        if event.button == 1:
+                            self.chat(f"{username(plr)} was kicked.")
+                            self.send_queue.append([plr, ["KICK", 1]])
+                    else:
+                        [self.projectiles, self.powerups, self.hit_queue, self.pw_queue, self.send_queue, self.chat_hist][pos[1]//25].clear()
+                        if not self.chat_hist:
+                            self.chat("SERVER: Chat cleared.")
 
             for pw in self.powerups:
                 for name, pos in self.players.items():
@@ -117,9 +123,15 @@ class GameServer:
             text = font.render(f"{round(tps, 2)} TPS", True, (255,255*(tps>59),255*(tps>59)))
             display.blit(text, (0,0))
 
+            pg.draw.line(display, (128,128,128), (395, 0), (395, 400), 5)
+
             for i, p in enumerate(self.players.keys()):
                 text = font.render(p, True, (255,255,255))
                 display.blit(text, (0, (i+1)*25))
+            for i, (item, text) in enumerate(zip([self.projectiles, self.powerups, self.hit_queue, self.pw_queue, self.send_queue, self.chat_hist], \
+                                                 ["PROJECTILES", "POWERUPS", "PENDING HITS", "PENDING PW HITS", "PENDING MSGS", "CHAT"])):
+                text = font.render(f"CLEAR {text} ({len(item)})", True, (255,255,255))
+                display.blit(text, (400, i*25))
             
             t += 1
             ticks += 1
@@ -129,18 +141,23 @@ class GameServer:
     def run_server(self):
         print("server started")
         while True:
-            self.threads.append(threading.Thread(target=self.serve, args=self.sock.accept(), daemon=True))
+            conn, addr = self.sock.accept()
+            banned = json.load(open("banned.json", "rt"))
+            if addr[0] in banned:
+                send(conn, ["BANNED", 1])
+                print(f"banned ip {addr[0]} tried to join")
+                conn.close()
+            self.threads.append(threading.Thread(target=self.serve, args=(conn, addr), daemon=True))
             self.threads[-1].start()
 
     def serve(self, conn, addr):
-        banned = json.load(open("banned.json", "rt"))
-        if addr[0] in banned:
-            send(conn, ["BANNED", 1])
-            return
         name = None
         while True:
             try:
-                for msg in map(json.loads, conn.recv(4096).split("\n".encode("utf-8"))[1:]):
+                data = conn.recv(4096).split("\n".encode("utf-8"))
+                if len(data) == 4096:
+                    print(f"can't keep up with {name}")
+                for msg in map(json.loads, data[1:]):
                     match msg[0]:
                         case "JOIN":
                             name = msg[1]
@@ -189,7 +206,7 @@ class GameServer:
                                 if msg[0] == full_name:
                                     send(conn, msg[1])
                         case "QUIT":
-                            send(conn, ["QUIT", 1])
+                            conn.close()
                             self.players.pop(full_name)
                             self.chat(f"{name} left.")
                             print(f"{full_name} disconnected")
