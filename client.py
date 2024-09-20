@@ -27,7 +27,7 @@ class Player:
     
     def tick(self):
         if self.shooting and self.cooldown <= 0:
-            send(json.dumps(["SHOOT", pg.mouse.get_pos(), self.powerups]))
+            send(["SHOOT", pg.mouse.get_pos(), self.powerups])
             self.cooldown = self.rate
             if self.powerups["rapid"] > 0:
                 self.cooldown /= 2
@@ -59,7 +59,7 @@ def send(data: str):
     if thread_exc:
         raise thread_exc
     
-    t = ExcPropagateThread(target=sock.send, args=[("\n" + data).encode("utf-8")], daemon=True)
+    t = ExcPropagateThread(target=sock.send, args=[("\n" + json.dumps(data)).encode("utf-8")], daemon=True)
     t.start()
 
 def recieve():
@@ -133,18 +133,18 @@ if __name__ == "__main__":
     killer = None
     left = False
 
-    send(json.dumps(["JOIN", plr.name, plr.pos, VERSION]))
+    send(["JOIN", plr.name, plr.pos, VERSION])
 
     while True:
         display.fill(0)
         t = time.perf_counter()
 
-        send(json.dumps(["UPDATE"]))
+        send(["UPDATE"])
 
         for event in pg.event.get():
             if event.type == pg.QUIT:
                 left = True
-                send(json.dumps(["QUIT"]))
+                send(["QUIT"])
                 print("You left the server.")
                 pg.quit()
                 quit()
@@ -155,7 +155,7 @@ if __name__ == "__main__":
                         msg = ""
                     elif event.key == 13:
                         chatting = False
-                        send(json.dumps(["CHAT", msg]))
+                        send(["CHAT", msg])
                         msg = ""
                     elif event.key == pg.K_BACKSPACE:
                         msg = msg[:-1]
@@ -165,7 +165,7 @@ if __name__ == "__main__":
                     chatting = True
                 elif event.key == pg.K_ESCAPE:
                     left = True
-                    send(json.dumps(["QUIT"]))
+                    send(["QUIT"])
                     print("You left the server.")
                     pg.quit()
                     quit()
@@ -189,13 +189,13 @@ if __name__ == "__main__":
             plr.pos[0] = min(max(plr.pos[0], 20), w-20)
             plr.pos[1] = min(max(plr.pos[1], 20), h-20)
 
-            send(json.dumps(["POS",plr.pos]))
+            send(["POS",plr.pos])
 
         for exit_type, exit_msg in zip(["BANNED", "KICK", "SHUTDOWN", "VERSION"], \
-            ["You are banned from the server.", "You have been kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}."]):
+            ["You are banned from the server.", "You were kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}."]):
             if exit_type in recieved.keys() and not left:
                 left = True
-                send(json.dumps(["QUIT"]))
+                send(["QUIT"])
                 if exit_type == "VERSION":
                     exit_msg = exit_msg.format(VERSION, recieved.get("VERSION", "unknown"))
                 print(exit_msg)
@@ -209,12 +209,12 @@ if __name__ == "__main__":
 
         for hit in recieved["hits"]:
             if username(hit[0]) == plr.name:
-                send(json.dumps(["HIT"]))
+                send(["HIT"])
                 if respawn_timer < 0 and plr.iframes <= 0:
                     plr.hp -= 1
                     plr.iframes = 6
                     if plr.hp <= 0:
-                        send(json.dumps(["DIED", hit[1]]))
+                        send(["DIED", hit[1]])
                         plr.pos = [w/2, h/2]
                         plr.hp = 3
                         respawn_timer = 180
@@ -226,7 +226,7 @@ if __name__ == "__main__":
         for hit in recieved["pw_hits"]:
             if username(hit[0]) == plr.name:
                 plr.powerups[hit[1]] = 300
-                send(json.dumps(["PW_HIT"]))
+                send(["PW_HIT"])
                 break
 
         if respawn_timer < 0:
@@ -245,7 +245,7 @@ if __name__ == "__main__":
         for pw, timer in plr.powerups.items():
             if timer > 0:
                 text = fonts[48].render({"rapid":"RAPID FIRE","triple":"TRIPLE SHOT","speed":"2X SPEED"}[pw], True, (255,0,0))
-                display.blit(text, (w-text.get_rect().width-random.random()*3, h-text.get_rect().height*(i+1)-random.random()*3))
+                display.blit(text, (w-text.get_rect().width-random.random()*5, h-text.get_rect().height*(i+1)-random.random()*5))
                 i += 1
 
         for p in players.items():
