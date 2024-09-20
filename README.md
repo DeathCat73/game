@@ -10,7 +10,8 @@ The server will start on port 38491
 
 ### To use a server:
 
-Click on player names to kick them  
+Click on player names on the left to kick them  
+Click on text on the right to clear lists if they get too big  
 To close the server:  
 1. Close the window  
 2. Press enter in the console  
