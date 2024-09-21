@@ -139,11 +139,8 @@ class GameServer:
             clock.tick(60)
 
     def run_server(self):
-        s = socket.socket()
-        s.connect(("8.8.8.8", 53))
-        ip = s.getsockname()
-        s.close()
-        print(f"server started on {ip[0]}:{ip[1]}")
+        ip, port = socket.gethostbyname_ex(socket.gethostname())[2][-1], self.sock.getsockname()[1]
+        print(f"server started on {ip}:{port}")
         while True:
             conn, addr = self.sock.accept()
             banned = json.load(open("banned.json", "rt"))
