@@ -91,15 +91,18 @@ class GameServer:
                     return
                 elif event.type == pg.MOUSEBUTTONDOWN:
                     pos = pg.mouse.get_pos()
-                    if pos[0] < 400:
-                        plr = list(self.players.keys())[pos[1]//25-1]
-                        if event.button == 1:
-                            self.chat(f"{username(plr)} was kicked.")
-                            self.send_queue.append([plr, ["KICK", 1]])
-                    else:
-                        [self.projectiles, self.powerups, self.hit_queue, self.pw_queue, self.send_queue, self.chat_hist][pos[1]//25].clear()
-                        if not self.chat_hist:
-                            self.chat("SERVER: Chat cleared.")
+                    try:
+                        if pos[0] < 400:
+                            plr = list(self.players.keys())[pos[1]//25-1]
+                            if event.button == 1:
+                                self.chat(f"{username(plr)} was kicked.")
+                                self.send_queue.append([plr, ["KICK", 1]])
+                        else:
+                            [self.projectiles, self.powerups, self.hit_queue, self.pw_queue, self.send_queue, self.chat_hist][pos[1]//25].clear()
+                            if not self.chat_hist:
+                                self.chat("SERVER: Chat cleared.")
+                    except IndexError:
+                        pass
 
             for pw in self.powerups:
                 for name, pos in self.players.items():
