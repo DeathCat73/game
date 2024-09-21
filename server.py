@@ -50,6 +50,7 @@ def send(conn, msg):
 
 class GameServer:
     def __init__(self, port=38491):
+        self.VERSION = 1.1
         self.threads = []
         self.sock = socket.create_server(("", port))
         self.players = dict()
@@ -59,7 +60,6 @@ class GameServer:
         self.hit_queue = []
         self.pw_queue = []
         self.send_queue = []
-        self.VERSION = 1.1
 
     def chat(self, msg):
         print(msg)
@@ -82,7 +82,7 @@ class GameServer:
 
             for event in pg.event.get():
                 if event.type == pg.QUIT:
-                    self.chat("! SERVER: STOPPING !")
+                    self.chat("! STOPPING !")
                     pg.quit()
                     time.sleep(1)
                     for plr in self.players:
@@ -139,7 +139,11 @@ class GameServer:
             clock.tick(60)
 
     def run_server(self):
-        print("server started")
+        s = socket.socket()
+        s.connect(("8.8.8.8", 53))
+        ip = s.getsockname()
+        s.close()
+        print(f"server started on {ip[0]}:{ip[1]}")
         while True:
             conn, addr = self.sock.accept()
             banned = json.load(open("banned.json", "rt"))
@@ -156,7 +160,7 @@ class GameServer:
             try:
                 data = conn.recv(4096).split("\n".encode("utf-8"))
                 if len(data) == 4096:
-                    print(f"can't keep up with {name}")
+                    print(f"can't keep up with {full_name}")
                 for msg in map(json.loads, data[1:]):
                     match msg[0]:
                         case "JOIN":
@@ -165,7 +169,7 @@ class GameServer:
                             self.players[full_name] = msg[2]
                             self.chat(f"{name} joined.")
                             print(f"{full_name} joined")
-                            if msg[3] != self.version:
+                            if msg[3] != self.VERSION:
                                 send(conn, ["VERSION", self.VERSION])
                         case "POS":
                             if full_name is not None:
@@ -205,6 +209,7 @@ class GameServer:
                             for msg in self.send_queue:
                                 if msg[0] == full_name:
                                     send(conn, msg[1])
+                                    self.send_queue.remove(msg)
                         case "QUIT":
                             conn.close()
                             self.players.pop(full_name)
@@ -224,11 +229,9 @@ class GameServer:
 if __name__ == "__main__":
     server = GameServer()
     serv_t = threading.Thread(target=server.run_server, daemon=True)
-    game_t = threading.Thread(target=server.run_game, daemon=True)
     serv_t.start()
-    game_t.start()
-    time.sleep(0.1)
-    input("press ENTER to stop the server AFTER closing the window.\n")
+    server.run_game()
+    time.sleep(0.5)
     print("server stopped")
     pg.quit()
     quit()
