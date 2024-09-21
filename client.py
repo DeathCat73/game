@@ -74,10 +74,8 @@ def recieve():
         partial_item += data[0]
         for item in [partial_item] * bool(partial_item) + data[1:-1]:
             msg = json.loads(item)
-            #print(msg[0])
             recieved[msg[0]] = msg[1]
-            if msg[0] == "QUIT":
-                print("recvd 2")
+            if msg[0] in exit_types:
                 return
         partial_item = data[-1]
 
@@ -98,6 +96,7 @@ if __name__ == "__main__":
         print("config.json created. Open it and enter a host, port and username.")
         pg.quit()
         quit()
+    exit_types = ["BANNED", "KICK", "SHUTDOWN", "VERSION"]
 
     plr = Player(config["NAME"], [960, 540])
 
@@ -191,11 +190,12 @@ if __name__ == "__main__":
 
             send(["POS",plr.pos])
 
-        for exit_type, exit_msg in zip(["BANNED", "KICK", "SHUTDOWN", "VERSION"], \
+        for exit_type, exit_msg in zip(exit_types, \
             ["You are banned from the server.", "You were kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}."]):
             if exit_type in recieved.keys() and not left:
                 left = True
-                send(["QUIT"])
+                if exit_type != "BANNED":
+                    send(["QUIT"])
                 if exit_type == "VERSION":
                     exit_msg = exit_msg.format(VERSION, recieved.get("VERSION", "unknown"))
                 print(exit_msg)

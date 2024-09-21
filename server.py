@@ -151,8 +151,9 @@ class GameServer:
                 send(conn, ["BANNED", 1])
                 print(f"banned ip {addr[0]} tried to join")
                 conn.close()
-            self.threads.append(threading.Thread(target=self.serve, args=(conn, addr), daemon=True))
-            self.threads[-1].start()
+            else:
+                self.threads.append(threading.Thread(target=self.serve, args=(conn, addr), daemon=True))
+                self.threads[-1].start()
 
     def serve(self, conn, addr):
         name = None
