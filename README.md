@@ -22,7 +22,7 @@ Have config.json in the same folder as client.py
 config.json should look like this:  
 `{`  
 `    "HOST": "host IP",`  
-`    "PORT": port as integer (38491 unless otherwise specified),`  
+`    "PORT": 38491 unless specified otherwise`  
 `    "NAME": "your username"`  
 `}`  
 If config.json is not present in the same folder as client.py, it will be created  
