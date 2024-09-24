@@ -12,12 +12,9 @@ The server will start on port 38491
 
 Click on player names on the left to kick them  
 Click on text on the right to clear lists if they get too big  
-To close the server:  
-1. Close the window  
-2. Press enter in the console  
-
-**IF DONE IN THE WRONG ORDER IT WILL NOT WORK**  
-**YOU WILL HAVE TO KILL THE PROCESS**  
+To close the server, close the window:  
+- The game logic will stop and all players will be kicked after 1 second  
+- The server and any remaining connections will close after another 0.5 seconds
 
 ### To run the client:
 
