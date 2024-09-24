@@ -17,24 +17,15 @@ class Player:
         self.powerups = {"rapid": 0,
                          "triple": 0,
                          "speed": 0}
-        self.shooting = False
         self.hp = 3
         self.iframes = 60
+        self.shooting = False
+        self.mouse_pos = [0,0]
+        self.respawn_timer = 0
 
     @property
     def rect(self):
         return pg.Rect(self.pos[0]-20, self.pos[1]-20, 40, 40)
-    
-    def tick(self):
-        if self.shooting and self.cooldown <= 0:
-            send(["SHOOT", pg.mouse.get_pos(), self.powerups])
-            self.cooldown = self.rate
-            if self.powerups["rapid"] > 0:
-                self.cooldown /= 2
-        for pwrup in self.powerups.keys():
-            self.powerups[pwrup] -= 1
-        self.cooldown -= 1
-        self.iframes -= 1
 
 
 class ExcPropagateThread(threading.Thread):
@@ -106,8 +97,7 @@ if __name__ == "__main__":
                 "chat": [],
                 "pwups": [],
                 "projs": [],
-                "hits": [],
-                "pw_hits": []}
+                "plr": None}
     recv_t = threading.Thread(target=recieve, daemon=True)
     recv_t.start()
     thread_exc = None
@@ -118,7 +108,7 @@ if __name__ == "__main__":
     clock = pg.time.Clock()
     fonts = {size: pg.font.Font(None, size) for size in [32,48,64]}
 
-    VERSION = 1.1
+    VERSION = 1.2
     fps = 60
     speed = 300
     players = dict()
@@ -168,10 +158,6 @@ if __name__ == "__main__":
                     print("You left the server.")
                     pg.quit()
                     quit()
-            elif event.type == pg.MOUSEBUTTONDOWN:
-                plr.shooting = True
-            elif event.type == pg.MOUSEBUTTONUP:
-                plr.shooting = False
 
         keys = pg.key.get_pressed()
         if not (chatting or respawn_timer > 0):
@@ -188,7 +174,8 @@ if __name__ == "__main__":
             plr.pos[0] = min(max(plr.pos[0], 20), w-20)
             plr.pos[1] = min(max(plr.pos[1], 20), h-20)
 
-            send(["POS",plr.pos])
+        plr_input = pg.mouse.get_pressed()[0] * 16 + keys[pg.K_w] * 8 + keys[pg.K_a] * 4 + keys[pg.K_s] * 2 + keys[pg.K_d]
+        send(["INPUT", plr_input, pg.mouse.get_pos()])
 
         for exit_type, exit_msg in zip(exit_types, \
             ["You are banned from the server.", "You were kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}."]):
@@ -207,30 +194,9 @@ if __name__ == "__main__":
         pwups = recieved["pwups"]
         projs = recieved["projs"]
 
-        for hit in recieved["hits"]:
-            if username(hit[0]) == plr.name:
-                send(["HIT"])
-                if respawn_timer < 0 and plr.iframes <= 0:
-                    plr.hp -= 1
-                    plr.iframes = 6
-                    if plr.hp <= 0:
-                        send(["DIED", hit[1]])
-                        plr.pos = [w/2, h/2]
-                        plr.hp = 3
-                        respawn_timer = 180
-                        iframes = 240
-                        killer = hit[1]
-                        for pwrup in plr.powerups.keys():
-                            plr.powerups[pwrup] = 0
-                    break
-        for hit in recieved["pw_hits"]:
-            if username(hit[0]) == plr.name:
-                plr.powerups[hit[1]] = 300
-                send(["PW_HIT"])
-                break
-
-        if respawn_timer < 0:
-            plr.tick()
+        if recieved["plr"] is not None:
+            for key, val in recieved["plr"].items():
+                plr.__dict__[key] = val
 
         chat_timer = max(chat_timer-1, chatting*180)
         if chatting: pg.draw.rect(display, (16,16,16), [0, h-30, w, 30])
@@ -248,10 +214,10 @@ if __name__ == "__main__":
                 display.blit(text, (w-text.get_rect().width-random.random()*5, h-text.get_rect().height*(i+1)-random.random()*5))
                 i += 1
 
-        for p in players.items():
-            name = username(p[0])
+        for p in players:
+            name = p[0]
             pg.draw.rect(display, (255*(name!=plr.name),127*(name==plr.name)*(1+(plr.iframes<=0)),0), [p[1][0]-20, p[1][1]-20, 40, 40])
-            text = fonts[32].render(name, True, (255,)*3)
+            text = fonts[32].render(username(name), True, (255,)*3)
             display.blit(text, (p[1][0]-text.get_rect().centerx, p[1][1]-50))
 
         for pw in pwups:
@@ -263,16 +229,16 @@ if __name__ == "__main__":
         for i in range(plr.hp):
             pg.draw.rect(display, (255,128,128), [40*i+10, 10, 30, 30])
 
-        if respawn_timer > 0:
+        if plr.respawn_timer > 0:
             text1 = fonts[64].render(f"Killed by {username(killer)}", True, (255,0,0))
-            text2 = fonts[48].render(f"Respawn in {respawn_timer // 60 + 1}s", True, (255,255,255))
+            text2 = fonts[48].render(f"Respawn in {plr.respawn_timer // 60 + 1}s", True, (255,255,255))
             display.blit(text1, (w/2 - text1.get_rect().centerx, h/2.5))
             display.blit(text2, (w/2 - text2.get_rect().centerx, h/2.5 + 35))
             plr.pos = [-1000, -1000]
-        elif respawn_timer == 0:
+        elif plr.respawn_timer == 0:
             plr.pos = [960, 540]
 
-        respawn_timer -= 1
+        plr.respawn_timer -= 1
 
         pg.display.update()
         clock.tick(fps)

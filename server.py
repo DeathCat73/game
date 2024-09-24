@@ -8,6 +8,39 @@ import numpy as np
 import time
 
 
+class Player:
+    def __init__(self, username, position):
+        self.name = username
+        self.pos = position
+        self.cooldown = 0
+        self.rate = 15
+        self.powerups = {"rapid": 0,
+                         "triple": 0,
+                         "speed": 0}
+        self.hp = 3
+        self.iframes = 60
+        self.shooting = False
+        self.mouse_pos = [0,0]
+        self.respawn_timer = 0
+
+    @property
+    def rect(self):
+        return pg.Rect(self.pos[0]-20, self.pos[1]-20, 40, 40)
+    
+    def tick(self):
+        for pwrup in self.powerups.keys():
+            self.powerups[pwrup] -= 1
+        self.cooldown -= 1
+        self.iframes -= 1
+        self.respawn_timer -= 1
+        if self.shooting and self.cooldown <= 0:
+            self.cooldown = self.rate
+            if self.powerups["rapid"] > 0:
+                self.cooldown /= 2
+            return True
+        return False
+
+
 class Powerup:
     def __init__(self):
         self.type = random.choice(["rapid", "triple", "speed"])
@@ -29,10 +62,10 @@ class Projectile:
         self.pos += self.velocity / 60
         if not self.rect.colliderect([0,0,1920,1080]):
             return False
-        for name, pos in players:
+        for name, plr in players:
             if name == self.shooter:
                 continue
-            rect = pg.Rect(pos[0]-20, pos[1]-20, 40, 40)
+            rect = pg.Rect(plr.pos[0]-20, plr.pos[1]-20, 40, 40)
             if self.rect.colliderect(rect):
                 return name, self.shooter
             
@@ -43,22 +76,23 @@ def username(name: str):
     return name[i2+1:]
 
 
-def send(conn, msg):
-    t = threading.Thread(target=conn.sendall, args=[("\n"+json.dumps(msg)).encode("utf-8")], daemon=True)
+def send(conn, msgs):
+    data = ""
+    for m in msgs:
+        data += "\n"+json.dumps(m)
+    t = threading.Thread(target=conn.sendall, args=[data.encode("utf-8")], daemon=True)
     t.start()
 
 
 class GameServer:
     def __init__(self, port=38491):
-        self.VERSION = 1.1
+        self.VERSION = 1.2
         self.threads = []
         self.sock = socket.create_server(("", port))
         self.players = dict()
         self.chat_hist = ["SERVER: Started."]
         self.projectiles = []
         self.powerups = []
-        self.hit_queue = []
-        self.pw_queue = []
         self.send_queue = []
 
     def chat(self, msg):
@@ -95,19 +129,19 @@ class GameServer:
                         if pos[0] < 400:
                             plr = list(self.players.keys())[pos[1]//25-1]
                             if event.button == 1:
-                                self.chat(f"{username(plr)} was kicked.")
-                                self.send_queue.append([plr, ["KICK", 1]])
+                                self.chat(f"{username(plr.name)} was kicked.")
+                                self.send_queue.append([plr.name, ["KICK", 1]])
                         else:
-                            [self.projectiles, self.powerups, self.hit_queue, self.pw_queue, self.send_queue, self.chat_hist][pos[1]//25].clear()
+                            [self.projectiles, self.powerups, self.send_queue, self.chat_hist][pos[1]//25].clear()
                             if not self.chat_hist:
                                 self.chat("SERVER: Chat cleared.")
                     except IndexError:
                         pass
 
             for pw in self.powerups:
-                for name, pos in self.players.items():
-                    if pw.rect.colliderect([pos[0]-20, pos[1]-20, 40, 40]):
-                        self.pw_queue.append((name, pw.type))
+                for name, plr in self.players.items():
+                    if pw.rect.colliderect([plr.pos[0]-20, plr.pos[1]-20, 40, 40]):
+                        self.players[name].powerups[pw.type] = 300
                         self.powerups.remove(pw)
                         break
             if random.random() < 0.001:
@@ -116,8 +150,21 @@ class GameServer:
                 hit = pr.tick(self.players.items())
                 if hit is not None:
                     if hit:
-                        self.hit_queue.append(hit)
+                        p = self.players[hit[0]]
+                        p.hp -= 1
+                        if p.hp <= 0:
+                            p.hp = 3
+                            p.respawn_timer = 180
+                            for pwup in p.powerups.keys():
+                                p.powerups[pwup] = 0
                     self.projectiles.remove(pr)
+
+            for name, p in self.players.items():
+                if p.tick():
+                    self.projectiles.append(Projectile(p.pos, name, np.array(p.mouse_pos) - p.pos))
+                    if p.powerups["triple"] > 0:
+                        self.projectiles.append(Projectile(p.pos, name, np.array(p.mouse_pos) + [random.random()*100, random.random()*100] - p.pos - (50,50)))
+                        self.projectiles.append(Projectile(p.pos, name, np.array(p.mouse_pos) + [random.random()*100, random.random()*100] - p.pos - (50,50)))
 
             if ticks == 30:
                 ticks = 0
@@ -131,8 +178,8 @@ class GameServer:
             for i, p in enumerate(self.players.keys()):
                 text = font.render(p, True, (255,255,255))
                 display.blit(text, (0, (i+1)*25))
-            for i, (item, text) in enumerate(zip([self.projectiles, self.powerups, self.hit_queue, self.pw_queue, self.send_queue, self.chat_hist], \
-                                                 ["PROJECTILES", "POWERUPS", "PENDING HITS", "PENDING PW HITS", "PENDING MSGS", "CHAT"])):
+            for i, (item, text) in enumerate(zip([self.projectiles, self.powerups, self.send_queue, self.chat_hist], \
+                                                 ["PROJECTILES", "POWERUPS", "PENDING MSGS", "CHAT"])):
                 text = font.render(f"CLEAR {text} ({len(item)})", True, (255,255,255))
                 display.blit(text, (400, i*25))
             
@@ -167,45 +214,40 @@ class GameServer:
                         case "JOIN":
                             name = msg[1]
                             full_name = f"{addr[0]}:{addr[1]}:{name}"
-                            self.players[full_name] = msg[2]
+                            plr = Player(full_name, [960,540])
+                            self.players[full_name] = plr
                             self.chat(f"{name} joined.")
                             print(f"{full_name} joined")
                             if msg[3] != self.VERSION:
                                 send(conn, ["VERSION", self.VERSION])
-                        case "POS":
+                        case "INPUT":
                             if full_name is not None:
-                                self.players[full_name] = msg[1]
+                                x = msg[1]
+                                plr.shooting = x >= 16
+                                x %= 16
+                                if x >= 8:
+                                    plr.pos[1] -= 5
+                                x %= 8
+                                if x >= 4:
+                                    plr.pos[0] -= 5
+                                x %= 4
+                                if x >= 2:
+                                    plr.pos[1] += 5
+                                x %= 2
+                                if x:
+                                    plr.pos[0] += 5
+
+                                plr.mouse_pos = msg[2]
                         case "CHAT":
                             self.chat(f"{name}: {msg[1]}")
-                        case "SHOOT":
-                            if len(self.projectiles) >= 200:
-                                continue
-                            offset = np.array(msg[1]) - self.players[full_name]
-                            self.projectiles.append(Projectile(self.players[full_name], full_name, offset))
-                            if msg[2]["triple"] > 0:
-                                self.projectiles.append(Projectile(self.players[full_name], full_name, offset + random.choices(range(-50, 51), k=2)))
-                                self.projectiles.append(Projectile(self.players[full_name], full_name, offset + random.choices(range(-50, 51), k=2)))
-                        case "HIT":
-                            for h in self.hit_queue:
-                                if h[0] == full_name:
-                                    self.hit_queue.remove(h)
-                        case "PW_HIT":
-                            for h in self.pw_queue:
-                                if h[0] == full_name:
-                                    self.pw_queue.remove(h)
-                        case "DIED":
-                            self.chat(f"{name} was killed by {username(msg[1])}")
                         case "UPDATE":
-                            data = {"players": self.players, 
+                            data = {"players": [(p[0], p[1].pos) for p in self.players.items()], 
                                     "chat": self.chat_hist[:30],
                                     "pwups": [pw.pos for pw in self.powerups],
                                     "projs": [list(pr.pos // 1) for pr in self.projectiles],
-                                    "hits": self.hit_queue,
-                                    "pw_hits": self.pw_queue}
+                                    "plr": plr.__dict__}
 
-                            for k, v in data.items():
-                                msg = [k,v]
-                                send(conn, msg)
+                            send(conn, [[k,v] for k, v in data.items()])
 
                             for msg in self.send_queue:
                                 if msg[0] == full_name:
