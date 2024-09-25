@@ -32,30 +32,33 @@ class Player:
         return pg.Rect(self.pos[0]-20, self.pos[1]-20, 40, 40)
     
     def tick(self):
-        mult = 1 + (self.powerups["speed"] > 0)
-        if self.mvmt >= 8:
-            self.pos[1] -= 5 * mult
-        if self.mvmt % 8 >= 4:
-            self.pos[0] -= 5 * mult
-        if self.mvmt % 4 >= 2:
-            self.pos[1] += 5 * mult
-        if self.mvmt % 2:
-            self.pos[0] += 5 * mult
-
-        self.pos[0] = min(max(self.pos[0], 20), 1900)
-        self.pos[1] = min(max(self.pos[1], 20), 1060)
-
-        for pwrup in self.powerups.keys():
-            self.powerups[pwrup] -= 1
-        self.cooldown -= 1
-        self.iframes -= 1
         self.respawn_timer -= 1
-        if self.shooting and self.cooldown <= 0:
-            self.cooldown = self.rate
-            if self.powerups["rapid"] > 0:
-                self.cooldown /= 2
-            return True
-        return False
+        if self.respawn_timer < 0:
+            mult = 1 + (self.powerups["speed"] > 0)
+            if self.mvmt >= 8:
+                self.pos[1] -= 5 * mult
+            if self.mvmt % 8 >= 4:
+                self.pos[0] -= 5 * mult
+            if self.mvmt % 4 >= 2:
+                self.pos[1] += 5 * mult
+            if self.mvmt % 2:
+                self.pos[0] += 5 * mult
+
+            self.pos[0] = min(max(self.pos[0], 20), 1900)
+            self.pos[1] = min(max(self.pos[1], 20), 1060)
+
+            for pwrup in self.powerups.keys():
+                self.powerups[pwrup] -= 1
+            self.cooldown -= 1
+            self.iframes -= 1
+            if self.shooting and self.cooldown <= 0:
+                self.cooldown = self.rate
+                if self.powerups["rapid"] > 0:
+                    self.cooldown /= 2
+                return True
+            return False
+        elif self.respawn_timer == 0:
+            self.pos = [960,540]
 
 
 class Powerup:
@@ -176,7 +179,7 @@ class GameServer:
                             self.players[hit[1]].kills += 1
                             p.hp = 3
                             p.respawn_timer = 180
-                            p.iframes = 240
+                            p.iframes = 60
                             for pwup in p.powerups.keys():
                                 p.powerups[pwup] = 0
                     self.projectiles.remove(pr)
