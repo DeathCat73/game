@@ -164,7 +164,7 @@ class GameServer:
                         self.players[name].powerups[pw.type] = 300
                         self.powerups.remove(pw)
                         break
-            if random.random() < 0.001:
+            if random.random() < 0.001 and len(self.powerups) < 20:
                 self.powerups.append(Powerup())
             for pr in self.projectiles:
                 hit = pr.tick(self.players.items())
