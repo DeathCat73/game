@@ -22,6 +22,9 @@ class Player:
         self.shooting = False
         self.mouse_pos = [0,0]
         self.respawn_timer = 0
+        self.killer = None
+        self.kills = 0
+        self.deaths = 0
 
     @property
     def rect(self):
@@ -153,8 +156,13 @@ class GameServer:
                         p = self.players[hit[0]]
                         p.hp -= 1
                         if p.hp <= 0:
+                            self.chat(f"{hit[0]} was killed by {hit[1]}")
+                            p.killer = hit[1]
+                            p.deaths += 1
+                            self.players[hit[1]].kills += 1
                             p.hp = 3
                             p.respawn_timer = 180
+                            p.iframes = 240
                             for pwup in p.powerups.keys():
                                 p.powerups[pwup] = 0
                     self.projectiles.remove(pr)

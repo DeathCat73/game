@@ -22,6 +22,9 @@ class Player:
         self.shooting = False
         self.mouse_pos = [0,0]
         self.respawn_timer = 0
+        self.killer = None
+        self.kills = 0
+        self.deaths = 0
 
     @property
     def rect(self):
@@ -119,7 +122,6 @@ if __name__ == "__main__":
     msg = ""
     chat_timer = 180
     respawn_timer = -1
-    killer = None
     left = False
 
     send(["JOIN", plr.name, plr.pos, VERSION])
@@ -230,13 +232,17 @@ if __name__ == "__main__":
             pg.draw.rect(display, (255,128,128), [40*i+10, 10, 30, 30])
 
         if plr.respawn_timer > 0:
-            text1 = fonts[64].render(f"Killed by {username(killer)}", True, (255,0,0))
+            text1 = fonts[64].render(f"Killed by {username(plr.killer)}", True, (255,0,0))
             text2 = fonts[48].render(f"Respawn in {plr.respawn_timer // 60 + 1}s", True, (255,255,255))
             display.blit(text1, (w/2 - text1.get_rect().centerx, h/2.5))
             display.blit(text2, (w/2 - text2.get_rect().centerx, h/2.5 + 35))
             plr.pos = [-1000, -1000]
         elif plr.respawn_timer == 0:
             plr.pos = [960, 540]
+
+        k_d = plr.kills / max(plr.deaths, 1)
+        text = fonts[32].render(f"K/D {k_d}", True, (255,255,255))
+        display.blit(text, (w-text.get_size()[0], h-text.get_size()[1]))
 
         plr.respawn_timer -= 1
 
