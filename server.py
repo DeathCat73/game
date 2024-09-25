@@ -34,13 +34,13 @@ class Player:
     def tick(self):
         mult = 1 + (self.powerups["speed"] > 0)
         if self.mvmt >= 8:
-            self.pos[1] -= 5
+            self.pos[1] -= 5 * mult
         if self.mvmt % 8 >= 4:
-            self.pos[0] -= 5
+            self.pos[0] -= 5 * mult
         if self.mvmt % 4 >= 2:
-            self.pos[1] += 5
+            self.pos[1] += 5 * mult
         if self.mvmt % 2:
-            self.pos[0] += 5
+            self.pos[0] += 5 * mult
 
         self.pos[0] = min(max(self.pos[0], 20), 1900)
         self.pos[1] = min(max(self.pos[1], 20), 1060)
