@@ -163,21 +163,8 @@ if __name__ == "__main__":
 
         keys = pg.key.get_pressed()
         if not (chatting or respawn_timer > 0):
-            mult = 1 + (plr.powerups["speed"] > 0)
-            if keys[pg.K_w]:
-                plr.pos[1] -= speed / fps * mult
-            if keys[pg.K_a]:
-                plr.pos[0] -= speed / fps * mult
-            if keys[pg.K_s]:
-                plr.pos[1] += speed / fps * mult
-            if keys[pg.K_d]:
-                plr.pos[0] += speed / fps * mult
-
-            plr.pos[0] = min(max(plr.pos[0], 20), w-20)
-            plr.pos[1] = min(max(plr.pos[1], 20), h-20)
-
-        plr_input = pg.mouse.get_pressed()[0] * 16 + keys[pg.K_w] * 8 + keys[pg.K_a] * 4 + keys[pg.K_s] * 2 + keys[pg.K_d]
-        send(["INPUT", plr_input, pg.mouse.get_pos()])
+            plr_input = pg.mouse.get_pressed()[0] * 16 + keys[pg.K_w] * 8 + keys[pg.K_a] * 4 + keys[pg.K_s] * 2 + keys[pg.K_d]
+            send(["INPUT", plr_input, pg.mouse.get_pos()])
 
         for exit_type, exit_msg in zip(exit_types, \
             ["You are banned from the server.", "You were kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}."]):
@@ -241,8 +228,8 @@ if __name__ == "__main__":
             plr.pos = [960, 540]
 
         k_d = plr.kills / max(plr.deaths, 1)
-        text = fonts[32].render(f"K/D {k_d}", True, (255,255,255))
-        display.blit(text, (w-text.get_size()[0], h-text.get_size()[1]))
+        text = fonts[32].render(f"K/D: {k_d:.2f}", True, (255,255,255))
+        display.blit(text, (w-text.get_size()[0], 0))
 
         plr.respawn_timer -= 1
 

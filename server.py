@@ -21,16 +21,30 @@ class Player:
         self.iframes = 60
         self.shooting = False
         self.mouse_pos = [0,0]
+        self.mvmt = 0
         self.respawn_timer = 0
         self.killer = None
-        self.kills = 0
-        self.deaths = 0
+        self.kills = 4
+        self.deaths = 3
 
     @property
     def rect(self):
         return pg.Rect(self.pos[0]-20, self.pos[1]-20, 40, 40)
     
     def tick(self):
+        mult = 1 + (self.powerups["speed"] > 0)
+        if self.mvmt >= 8:
+            self.pos[1] -= 5
+        if self.mvmt % 8 >= 4:
+            self.pos[0] -= 5
+        if self.mvmt % 4 >= 2:
+            self.pos[1] += 5
+        if self.mvmt % 2:
+            self.pos[0] += 5
+
+        self.pos[0] = min(max(self.pos[0], 20), 1900)
+        self.pos[1] = min(max(self.pos[1], 20), 1060)
+
         for pwrup in self.powerups.keys():
             self.powerups[pwrup] -= 1
         self.cooldown -= 1
@@ -132,8 +146,8 @@ class GameServer:
                         if pos[0] < 400:
                             plr = list(self.players.keys())[pos[1]//25-1]
                             if event.button == 1:
-                                self.chat(f"{username(plr.name)} was kicked.")
-                                self.send_queue.append([plr.name, ["KICK", 1]])
+                                self.chat(f"{username(plr)} was kicked.")
+                                self.send_queue.append([plr, ["KICK", 1]])
                         else:
                             [self.projectiles, self.powerups, self.send_queue, self.chat_hist][pos[1]//25].clear()
                             if not self.chat_hist:
@@ -156,7 +170,7 @@ class GameServer:
                         p = self.players[hit[0]]
                         p.hp -= 1
                         if p.hp <= 0:
-                            self.chat(f"{hit[0]} was killed by {hit[1]}")
+                            self.chat(f"{username(hit[0])} was killed by {username(hit[1])}")
                             p.killer = hit[1]
                             p.deaths += 1
                             self.players[hit[1]].kills += 1
@@ -232,19 +246,7 @@ class GameServer:
                             if full_name is not None:
                                 x = msg[1]
                                 plr.shooting = x >= 16
-                                x %= 16
-                                if x >= 8:
-                                    plr.pos[1] -= 5
-                                x %= 8
-                                if x >= 4:
-                                    plr.pos[0] -= 5
-                                x %= 4
-                                if x >= 2:
-                                    plr.pos[1] += 5
-                                x %= 2
-                                if x:
-                                    plr.pos[0] += 5
-
+                                plr.mvmt = x % 16
                                 plr.mouse_pos = msg[2]
                         case "CHAT":
                             self.chat(f"{name}: {msg[1]}")
@@ -259,7 +261,7 @@ class GameServer:
 
                             for msg in self.send_queue:
                                 if msg[0] == full_name:
-                                    send(conn, msg[1])
+                                    send(conn, [msg[1]])
                                     self.send_queue.remove(msg)
                         case "QUIT":
                             conn.close()
