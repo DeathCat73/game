@@ -24,8 +24,8 @@ class Player:
         self.mvmt = 0
         self.respawn_timer = 0
         self.killer = None
-        self.kills = 4
-        self.deaths = 3
+        self.kills = 0
+        self.deaths = 0
 
     @property
     def rect(self):
