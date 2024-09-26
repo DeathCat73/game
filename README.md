@@ -8,6 +8,10 @@ banned.json should be a list of IPs to block
 Run server.py  
 The server will start on port 38491
 
+### To run a server in a Docker container:
+
+Run `docker compose up`
+
 ### To use a server:
 
 Click on player names on the left to kick them  
