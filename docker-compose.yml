@@ -1,0 +1,8 @@
+version: '3'
+
+services:
+  Server:
+    build: .
+    image: deathcat73/game:latest
+    ports:
+      - "38491:38491"

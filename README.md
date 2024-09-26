@@ -3,10 +3,14 @@ simple multiplayer game using pygame
 
 ### To run a server:
 
-Have banned.json in the same folder as server.py  
-banned.json should be a list of IPs to block  
-Run server.py  
+Have **banned.json** in the same folder as **server.py**
+**banned.json** should be a list of IPs to block  
+Run `python3 server.py`
 The server will start on port 38491
+
+### To run a server in a Docker container:
+
+Run `docker compose up`
 
 ### To use a server:
 
@@ -19,15 +23,16 @@ To close the server, close the window:
 
 ### To run the client:
 
-Have config.json in the same folder as client.py  
-config.json should look like this:  
+Have **config.json** in the same folder as **client.py**
+**config.json** should look like this:  
 `{`  
 `    "HOST": "host IP",`  
 `    "PORT": 38491 unless specified otherwise`  
 `    "NAME": "your username"`  
 `}`  
-If config.json is not present in the same folder as client.py, it will be created  
-run client.py
+If **config.json** is not present in the same folder as **client.py**, it will be created.
+  
+run `python3 client.py`
 
 ### To use the client:
 
