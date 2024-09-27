@@ -6,6 +6,7 @@ import pygame as pg
 import math
 import numpy as np
 import time
+import argparse
 
 
 class Player:
@@ -121,42 +122,44 @@ class GameServer:
         while len("  ".join(self.chat_hist)) > 3500:
             self.chat_hist = self.chat_hist[:-1]
 
-    def run_game(self):
+    def run_game(self, gui=False):
         pg.init()
-        display = pg.display.set_mode((800, 400))
-        clock = pg.time.Clock()
-        font = pg.font.Font(None, 32)
-        t = 0
+        if gui:
+            display = pg.display.set_mode((800, 400))
+            font = pg.font.Font(None, 32)
+            tps = 0
+            timer = time.perf_counter()
         ticks = 0
-        tps = 0
-        timer = time.perf_counter()
+        clock = pg.time.Clock()
+        t = 0
         print("game started")
         while True:
-            display.fill(0)
+            if gui: display.fill(0)
 
-            for event in pg.event.get():
-                if event.type == pg.QUIT:
-                    self.chat("! STOPPING !")
-                    pg.quit()
-                    time.sleep(1)
-                    for plr in self.players:
-                        self.send_queue.append([plr, ["SHUTDOWN", 1]])
-                    print("game stopped")
-                    return
-                elif event.type == pg.MOUSEBUTTONDOWN:
-                    pos = pg.mouse.get_pos()
-                    try:
-                        if pos[0] < 400:
-                            plr = list(self.players.keys())[pos[1]//25-1]
-                            if event.button == 1:
-                                self.chat(f"{username(plr)} was kicked.")
-                                self.send_queue.append([plr, ["KICK", 1]])
-                        else:
-                            [self.projectiles, self.powerups, self.send_queue, self.chat_hist][pos[1]//25].clear()
-                            if not self.chat_hist:
-                                self.chat("SERVER: Chat cleared.")
-                    except IndexError:
-                        pass
+            if gui:
+                for event in pg.event.get():
+                    if event.type == pg.QUIT:
+                        self.chat("! STOPPING !")
+                        pg.quit()
+                        time.sleep(1)
+                        for plr in self.players:
+                            self.send_queue.append([plr, ["SHUTDOWN", 1]])
+                        print("game stopped")
+                        return
+                    elif event.type == pg.MOUSEBUTTONDOWN:
+                        pos = pg.mouse.get_pos()
+                        try:
+                            if pos[0] < 400:
+                                plr = list(self.players.keys())[pos[1]//25-1]
+                                if event.button == 1:
+                                    self.chat(f"{username(plr)} was kicked.")
+                                    self.send_queue.append([plr, ["KICK", 1]])
+                            else:
+                                [self.projectiles, self.powerups, self.send_queue, self.chat_hist][pos[1]//25].clear()
+                                if not self.chat_hist:
+                                    self.chat("SERVER: Chat cleared.")
+                        except IndexError:
+                            pass
 
             for pw in self.powerups:
                 for name, plr in self.players.items():
@@ -191,26 +194,28 @@ class GameServer:
                         self.projectiles.append(Projectile(p.pos, name, np.array(p.mouse_pos) + [random.random()*100, random.random()*100] - p.pos - (50,50)))
                         self.projectiles.append(Projectile(p.pos, name, np.array(p.mouse_pos) + [random.random()*100, random.random()*100] - p.pos - (50,50)))
 
-            if ticks == 30:
-                ticks = 0
-                tps = 30 / (time.perf_counter() - timer)
-                timer = time.perf_counter()
-            text = font.render(f"{round(tps, 2)} TPS", True, (255,255*(tps>59),255*(tps>59)))
-            display.blit(text, (0,0))
+            if gui:
+                if ticks == 30:
+                    ticks = 0
+                    tps = 30 / (time.perf_counter() - timer)
+                    timer = time.perf_counter()
+                text = font.render(f"{round(tps, 2)} TPS", True, (255,255*(tps>59),255*(tps>59)))
+                display.blit(text, (0,0))
 
-            pg.draw.line(display, (128,128,128), (395, 0), (395, 400), 5)
+                pg.draw.line(display, (128,128,128), (395, 0), (395, 400), 5)
 
-            for i, p in enumerate(self.players.keys()):
-                text = font.render(p, True, (255,255,255))
-                display.blit(text, (0, (i+1)*25))
-            for i, (item, text) in enumerate(zip([self.projectiles, self.powerups, self.send_queue, self.chat_hist], \
-                                                 ["PROJECTILES", "POWERUPS", "PENDING MSGS", "CHAT"])):
-                text = font.render(f"CLEAR {text} ({len(item)})", True, (255,255,255))
-                display.blit(text, (400, i*25))
+                for i, p in enumerate(self.players.keys()):
+                    text = font.render(p, True, (255,255,255))
+                    display.blit(text, (0, (i+1)*25))
+                for i, (item, text) in enumerate(zip([self.projectiles, self.powerups, self.send_queue, self.chat_hist], \
+                                                    ["PROJECTILES", "POWERUPS", "PENDING MSGS", "CHAT"])):
+                    text = font.render(f"CLEAR {text} ({len(item)})", True, (255,255,255))
+                    display.blit(text, (400, i*25))
             
             t += 1
-            ticks += 1
-            pg.display.update()
+            if gui:
+                ticks += 1
+                pg.display.update()
             clock.tick(60)
 
     def run_server(self):
@@ -283,10 +288,14 @@ class GameServer:
 
 
 if __name__ == "__main__":
-    server = GameServer()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--gui", const=True, nargs="?")
+    parser.add_argument("--port", type=int, default=38491)
+    args = parser.parse_args()
+    server = GameServer(args.port)
     serv_t = threading.Thread(target=server.run_server, daemon=True)
     serv_t.start()
-    server.run_game()
+    server.run_game(args.gui)
     time.sleep(0.5)
     print("server stopped")
     pg.quit()
