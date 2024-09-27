@@ -37,13 +37,13 @@ class Player:
         if self.respawn_timer < 0:
             mult = 1 + (self.powerups["speed"] > 0)
             if self.mvmt >= 8:
-                self.pos[1] -= 5 * mult
+                self.pos[1] -= 10 * mult
             if self.mvmt % 8 >= 4:
-                self.pos[0] -= 5 * mult
+                self.pos[0] -= 10 * mult
             if self.mvmt % 4 >= 2:
-                self.pos[1] += 5 * mult
+                self.pos[1] += 10 * mult
             if self.mvmt % 2:
-                self.pos[0] += 5 * mult
+                self.pos[0] += 10 * mult
 
             self.pos[0] = min(max(self.pos[0], 20), 1900)
             self.pos[1] = min(max(self.pos[1], 20), 1060)
@@ -80,7 +80,7 @@ class Projectile:
         return pg.Rect(self.pos[0]-5, self.pos[1]-5, 10, 10)
 
     def tick(self, players):
-        self.pos += self.velocity / 60
+        self.pos += self.velocity / 30
         if not self.rect.colliderect([0,0,1920,1080]):
             return False
         for name, plr in players:
@@ -167,7 +167,7 @@ class GameServer:
                         self.players[name].powerups[pw.type] = 300
                         self.powerups.remove(pw)
                         break
-            if random.random() < 0.001 and len(self.powerups) < 20:
+            if random.random() < 0.002 and len(self.powerups) < 20:
                 self.powerups.append(Powerup())
             for pr in self.projectiles:
                 hit = pr.tick(self.players.items())
@@ -195,9 +195,9 @@ class GameServer:
                         self.projectiles.append(Projectile(p.pos, name, np.array(p.mouse_pos) + [random.random()*100, random.random()*100] - p.pos - (50,50)))
 
             if gui:
-                if ticks == 30:
+                if ticks == 15:
                     ticks = 0
-                    tps = 30 / (time.perf_counter() - timer)
+                    tps = 15 / (time.perf_counter() - timer)
                     timer = time.perf_counter()
                 text = font.render(f"{round(tps, 2)} TPS", True, (255,255*(tps>59),255*(tps>59)))
                 display.blit(text, (0,0))
@@ -216,7 +216,7 @@ class GameServer:
             if gui:
                 ticks += 1
                 pg.display.update()
-            clock.tick(60)
+            clock.tick(30)
 
     def run_server(self):
         ip, port = socket.gethostbyname_ex(socket.gethostname())[2][-1], self.sock.getsockname()[1]

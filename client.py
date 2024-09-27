@@ -123,6 +123,7 @@ if __name__ == "__main__":
     chat_timer = 180
     respawn_timer = -1
     left = False
+    frames = 0
 
     send(["JOIN", plr.name, plr.pos, VERSION])
 
@@ -162,7 +163,7 @@ if __name__ == "__main__":
                     quit()
 
         keys = pg.key.get_pressed()
-        if not (chatting or respawn_timer > 0):
+        if not (chatting or respawn_timer > 0 or frames % 3):
             plr_input = pg.mouse.get_pressed()[0] * 16 + keys[pg.K_w] * 8 + keys[pg.K_a] * 4 + keys[pg.K_s] * 2 + keys[pg.K_d]
             send(["INPUT", plr_input, pg.mouse.get_pos()])
 
@@ -231,7 +232,7 @@ if __name__ == "__main__":
         text = fonts[32].render(f"K/D: {k_d:.2f}", True, (255,255,255))
         display.blit(text, (w-text.get_size()[0], 0))
 
-        plr.respawn_timer -= 1
+        frames += 1
 
         pg.display.update()
         clock.tick(fps)
