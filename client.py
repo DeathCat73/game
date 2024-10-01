@@ -50,7 +50,7 @@ class ExcPropagateThread(threading.Thread):
         return self.ret
     
 
-def send(data: str):
+def send(data):
     if thread_exc:
         raise thread_exc
     
@@ -64,15 +64,23 @@ def recieve():
     while True:
         data = sock.recv(4096)
         buffer += data
-        if len(data) == 4096:
+        items = buffer.split("\n".encode("utf-8"))
+        overflow = len(data) == 4096
+        if overflow:
             print("Can't keep up with the server")
-        for item in buffer.split("\n".encode("utf-8"))[:-1]:
+            # discard partially sent message
+            items = items[:-1]
+        for item in items:
             if not item: continue
             msg = json.loads(item)
             recieved[msg[0]] = msg[1]
             if msg[0] in exit_types:
                 return
-        buffer = buffer.split("\n".encode("utf-8"))[-1]
+        if overflow:
+            buffer = buffer.split("\n".encode("utf-8"))[-1]
+            # keep partial msg to be completed later
+        else:
+            buffer = bytes()
 
 
 def username(name: str):

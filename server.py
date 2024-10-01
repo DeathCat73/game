@@ -235,12 +235,22 @@ class GameServer:
 
     def serve(self, conn, addr):
         name = None
-        while True:
+        buffer = bytes()
+        exited = False
+        while not exited:
             try:
-                data = conn.recv(4096).split("\n".encode("utf-8"))
-                if len(data) == 4096:
+                data = conn.recv(4096)
+                buffer += data
+                items = buffer.split("\n".encode("utf-8"))
+                overflow = len(data) == 4096
+                if overflow:
                     print(f"can't keep up with {full_name}")
-                for msg in map(json.loads, data[1:]):
+                    # discard partially sent message
+                    items = items[:-1]
+                for item in items:
+                    if not item: continue
+                    msg = json.loads(item)
+                    print(msg)
                     match msg[0]:
                         case "JOIN":
                             name = msg[1]
@@ -269,23 +279,30 @@ class GameServer:
                             send(conn, [[k,v] for k, v in data.items()])
 
                             for msg in self.send_queue:
-                                if msg[0] == full_name:
+                                if msg[0] in [full_name ,"ALL"]:
                                     send(conn, [msg[1]])
                                     self.send_queue.remove(msg)
                         case "QUIT":
-                            conn.close()
-                            self.players.pop(full_name)
-                            self.chat(f"{name} left.")
-                            print(f"{full_name} disconnected")
-                            return
-                            
-            except json.JSONDecodeError:
-                pass
+                            # break while from within nested for
+                            exited = True
+                        
+                if overflow:
+                    buffer = buffer.split("\n".encode("utf-8"))[-1]
+                    # keep partial msg to be completed later
+                else:
+                    buffer = bytes()
+
             except ConnectionResetError:
+                # no QUIT message
                 self.players.pop(full_name)
                 self.chat(f"{name} left.")
                 print(f"{full_name} disconnected suddenly")
                 return
+            
+        self.players.pop(full_name)
+        self.chat(f"{name} left.")
+        print(f"{full_name} disconnected")
+        conn.close()
 
 
 if __name__ == "__main__":
