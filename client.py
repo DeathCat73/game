@@ -60,19 +60,19 @@ def send(data: str):
 def recieve():
     global recieved
 
-    partial_item = bytes()
+    buffer = bytes()
     while True:
         data = sock.recv(4096)
+        buffer += data
         if len(data) == 4096:
             print("Can't keep up with the server")
-        data = data.split("\n".encode("utf-8"))
-        partial_item += data[0]
-        for item in [partial_item] * bool(partial_item) + data[1:-1]:
+        for item in buffer.split("\n".encode("utf-8"))[:-1]:
+            if not item: continue
             msg = json.loads(item)
             recieved[msg[0]] = msg[1]
             if msg[0] in exit_types:
                 return
-        partial_item = data[-1]
+        buffer = buffer.split("\n".encode("utf-8"))[-1]
 
 
 def username(name: str):
