@@ -186,6 +186,10 @@ class GameServer:
                             p.iframes = 60
                             for pwup in p.powerups.keys():
                                 p.powerups[pwup] = 0
+
+                            for plr in self.players:
+                                self.send_queue.append([plr, ["death", [p.name, time.time()]]])
+                                # time used as per-event identifier
                     self.projectiles.remove(pr)
 
             for name, p in self.players.items():
@@ -250,7 +254,6 @@ class GameServer:
                 for item in items:
                     if not item: continue
                     msg = json.loads(item)
-                    print(msg)
                     match msg[0]:
                         case "JOIN":
                             name = msg[1]
@@ -279,7 +282,7 @@ class GameServer:
                             send(conn, [[k,v] for k, v in data.items()])
 
                             for msg in self.send_queue:
-                                if msg[0] in [full_name ,"ALL"]:
+                                if msg[0] == full_name:
                                     send(conn, [msg[1]])
                                     self.send_queue.remove(msg)
                         case "QUIT":

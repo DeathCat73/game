@@ -30,6 +30,23 @@ class Player:
     @property
     def rect(self):
         return pg.Rect(self.pos[0]-20, self.pos[1]-20, 40, 40)
+    
+
+class Particle:
+    def __init__(self, position, speed=200):
+        self.pos = np.array(position, np.float64)
+        self.speed = speed
+        self.age = 0
+        theta = random.random() * np.pi * 2
+        self.direction = np.array([np.cos(theta), np.sin(theta)]) * random.random()
+
+    def tick(self):
+        self.age += 1
+        self.pos += self.direction * self.speed / 60 * 0.98 ** self.age
+        return self.age >= 60
+    
+    def draw(self):
+        pg.draw.rect(display, (min(255,255*(90-self.age)/60),0,0), [self.pos-5, [10,10]])
 
 
 class ExcPropagateThread(threading.Thread):
@@ -107,7 +124,8 @@ if __name__ == "__main__":
                 "chat": [],
                 "pwups": [],
                 "projs": [],
-                "plr": None}
+                "plr": None,
+                "death": ["", 0]}
     recv_t = threading.Thread(target=recieve, daemon=True)
     recv_t.start()
     thread_exc = None
@@ -120,7 +138,6 @@ if __name__ == "__main__":
 
     VERSION = 1.2
     fps = 60
-    speed = 300
     players = dict()
     chat = []
     pwups = []
@@ -128,9 +145,10 @@ if __name__ == "__main__":
     chatting = False
     msg = ""
     chat_timer = 180
-    respawn_timer = -1
     left = False
     frames = 0
+    last_death = ["", 0]
+    particles = []
 
     send(["JOIN", plr.name, plr.pos, VERSION])
 
@@ -170,7 +188,7 @@ if __name__ == "__main__":
                     quit()
 
         keys = pg.key.get_pressed()
-        if not (chatting or respawn_timer > 0 or frames % 3):
+        if not (chatting or plr.respawn_timer > 0 or frames % 3):
             plr_input = pg.mouse.get_pressed()[0] * 16 + keys[pg.K_w] * 8 + keys[pg.K_a] * 4 + keys[pg.K_s] * 2 + keys[pg.K_d]
             send(["INPUT", plr_input, pg.mouse.get_pos()])
 
@@ -196,6 +214,15 @@ if __name__ == "__main__":
             for key, val in recieved["plr"].items():
                 plr.__dict__[key] = val
 
+        if recieved["death"] != last_death:
+            last_death = recieved["death"]
+            for _ in range(50):
+                particles.append(Particle(dict(players)[last_death[0]]))
+
+        for p in particles:
+            if p.tick():
+                particles.remove(p)
+
         chat_timer = max(chat_timer-1, chatting*180)
         if chatting: pg.draw.rect(display, (16,16,16), [0, h-30, w, 30])
         text = fonts[32].render(msg, True, (min(chat_timer*2,255),)*3)
@@ -212,17 +239,8 @@ if __name__ == "__main__":
                 display.blit(text, (w-text.get_width()-random.random()*5, h-text.get_height()*(i+1)-random.random()*5))
                 i += 1
 
-        for p in players:
-            name = p[0]
-            pg.draw.rect(display, (255*(name!=plr.name),127*(name==plr.name)*(1+(plr.iframes<=0)),0), [p[1][0]-20, p[1][1]-20, 40, 40])
-            text = fonts[32].render(username(name), True, (255,)*3)
-            display.blit(text, (p[1][0]-text.get_rect().centerx, p[1][1]-50))
-
         for pw in pwups:
             pg.draw.rect(display, np.array([255]) * colorsys.hsv_to_rgb((t/2+pw[0]/2000)%1, 1, 1), [pw[0]-15,pw[1]-15,30,30])
-
-        for pr in projs:
-            pg.draw.rect(display, (255,)*3, [pr[0]-5,pr[1]-5,10,10])
 
         for i in range(plr.hp):
             pg.draw.rect(display, (255,128,128), [40*i+10, 10, 30, 30])
@@ -239,6 +257,18 @@ if __name__ == "__main__":
         k_d = plr.kills / max(plr.deaths, 1)
         text = fonts[32].render(f"K/D: {k_d:.2f}", True, (255,255,255))
         display.blit(text, (w-text.get_size()[0], 0))
+
+        for p in players:
+            name = p[0]
+            pg.draw.rect(display, (255*(name!=plr.name),127*(name==plr.name)*(1+(plr.iframes<=0)),0), [p[1][0]-20, p[1][1]-20, 40, 40])
+            text = fonts[32].render(username(name), True, (255,)*3)
+            display.blit(text, (p[1][0]-text.get_rect().centerx, p[1][1]-50))
+
+        for p in particles:
+            p.draw()
+
+        for pr in projs:
+            pg.draw.rect(display, (255,)*3, [pr[0]-5,pr[1]-5,10,10])
 
         frames += 1
 
