@@ -6,6 +6,7 @@ import json
 import colorsys
 import numpy as np
 import random
+import argparse
 
 
 class Player:
@@ -82,19 +83,17 @@ def username(name: str):
 
 if __name__ == "__main__":
 
-    try:
-        config = json.load(open("config.json", "rt"))
-    except FileNotFoundError:
-        with open("config.json", "wt") as f:
-            f.write('{\n    "HOST": "0.0.0.0",\n    "PORT": 38491,\n    "NAME": "Player"\n}')
-        print("config.json created. Open it and enter a host, port and username.")
-        pg.quit()
-        quit()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--name", type=str, required=True)
+    parser.add_argument("--host", type=str, default="127.0.0.1")
+    parser.add_argument("--port", type=int, default=38491)
+    config = parser.parse_args()
+
     exit_types = ["BANNED", "KICK", "SHUTDOWN", "VERSION"]
 
-    plr = Player(config["NAME"], [960, 540])
+    plr = Player(config.name, [960, 540])
 
-    sock = socket.create_connection((config["HOST"], config["PORT"]))
+    sock = socket.create_connection((config.host, config.port))
 
     recieved = {"players": dict(), 
                 "chat": [],
@@ -185,6 +184,7 @@ if __name__ == "__main__":
         projs = recieved["projs"]
 
         if recieved["plr"] is not None:
+            # replacing whole dict would break at start if its even allowed
             for key, val in recieved["plr"].items():
                 plr.__dict__[key] = val
 
@@ -201,7 +201,7 @@ if __name__ == "__main__":
         for pw, timer in plr.powerups.items():
             if timer > 0:
                 text = fonts[48].render({"rapid":"RAPID FIRE","triple":"TRIPLE SHOT","speed":"2X SPEED"}[pw], True, (255,0,0))
-                display.blit(text, (w-text.get_rect().width-random.random()*5, h-text.get_rect().height*(i+1)-random.random()*5))
+                display.blit(text, (w-text.get_width()-random.random()*5, h-text.get_height()*(i+1)-random.random()*5))
                 i += 1
 
         for p in players:

@@ -106,12 +106,13 @@ def send(conn, msgs):
 
 
 class GameServer:
-    def __init__(self, port=38491):
+    def __init__(self, name="server", port=38491):
         self.VERSION = 1.2
+        self.name = name
         self.threads = []
         self.sock = socket.create_server(("", port))
         self.players = dict()
-        self.chat_hist = ["SERVER: Started."]
+        self.chat_hist = [f"SERVER {self.name}: Started."]
         self.projectiles = []
         self.powerups = []
         self.send_queue = []
@@ -149,15 +150,15 @@ class GameServer:
                     elif event.type == pg.MOUSEBUTTONDOWN:
                         pos = pg.mouse.get_pos()
                         try:
-                            if pos[0] < 400:
-                                plr = list(self.players.keys())[pos[1]//25-1]
+                            if pos[0] < 400 and pos[1] >= 50:
+                                plr = list(self.players.keys())[pos[1]//25-2]
                                 if event.button == 1:
                                     self.chat(f"{username(plr)} was kicked.")
                                     self.send_queue.append([plr, ["KICK", 1]])
                             else:
                                 [self.projectiles, self.powerups, self.send_queue, self.chat_hist][pos[1]//25].clear()
                                 if not self.chat_hist:
-                                    self.chat("SERVER: Chat cleared.")
+                                    self.chat(f"SERVER {self.name}: Chat cleared.")
                         except IndexError:
                             pass
 
@@ -199,14 +200,14 @@ class GameServer:
                     ticks = 0
                     tps = 30 / (time.perf_counter() - timer)
                     timer = time.perf_counter()
-                text = font.render(f"{round(tps, 2)} TPS", True, (255,255*(tps>59),255*(tps>59)))
+                text = font.render(f"{self.name}: {round(tps, 2)} TPS", True, (255,255*(tps>59),255*(tps>59)))
                 display.blit(text, (0,0))
 
                 pg.draw.line(display, (128,128,128), (395, 0), (395, 400), 5)
 
                 for i, p in enumerate(self.players.keys()):
                     text = font.render(p, True, (255,255,255))
-                    display.blit(text, (0, (i+1)*25))
+                    display.blit(text, (0, (i+2)*25))
                 for i, (item, text) in enumerate(zip([self.projectiles, self.powerups, self.send_queue, self.chat_hist], \
                                                     ["PROJECTILES", "POWERUPS", "PENDING MSGS", "CHAT"])):
                     text = font.render(f"CLEAR {text} ({len(item)})", True, (255,255,255))
@@ -220,7 +221,7 @@ class GameServer:
 
     def run_server(self):
         ip, port = socket.gethostbyname_ex(socket.gethostname())[2][-1], self.sock.getsockname()[1]
-        print(f"server started on {ip}:{port}")
+        print(f"server {self.name} started on {ip}:{port}")
         while True:
             conn, addr = self.sock.accept()
             banned = json.load(open("banned.json", "rt"))
@@ -290,9 +291,10 @@ class GameServer:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gui", const=True, nargs="?")
+    parser.add_argument("--name", type=str, default="server")
     parser.add_argument("--port", type=int, default=38491)
     args = parser.parse_args()
-    server = GameServer(args.port)
+    server = GameServer(args.name, args.port)
     serv_t = threading.Thread(target=server.run_server, daemon=True)
     serv_t.start()
     server.run_game(args.gui)
