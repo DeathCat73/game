@@ -8,6 +8,8 @@ import numpy as np
 import random
 import argparse
 
+pg.init()
+
 
 class Player:
     def __init__(self, username, position):
@@ -30,6 +32,35 @@ class Player:
     @property
     def rect(self):
         return pg.Rect(self.pos[0]-20, self.pos[1]-20, 40, 40)
+    
+
+class TextDisplay:
+    def __init__(self, position=(0,0), font=pg.font.Font(None,32), text_func=lambda : "Hello, world!", align="l", col=(255,255,255), bg_col=None):
+        self.pos = np.array(position)
+        self.align = align
+        self.font = font
+        self.text_func = text_func
+        self.col = col
+        self.bg_col = bg_col
+
+    def draw(self, display, offset=[0,0]):
+        surf = self.font.render(self.text_func(), True, self.col, self.bg_col)
+        match self.align:
+            case "l":
+                pass
+            case "r":
+                offset[0] -= surf.get_width()
+            case "c":
+                offset[0] -= surf.get_rect().centerx
+        display.blit(surf, self.pos + offset)
+        match self.align:
+            case "l":
+                pass
+            case "r":
+                offset[0] += surf.get_width()
+            case "c":
+                offset[0] += surf.get_rect().centerx
+        # mutability jank
     
 
 class Particle:
@@ -150,6 +181,14 @@ if __name__ == "__main__":
     last_death = ["", 0]
     particles = []
 
+    curr_chat_text = TextDisplay((10,h-25), fonts[32], lambda : msg, "l", (min(chat_timer*2,255),)*3)
+    kd_text = TextDisplay((w,0), fonts[32], lambda : f"K/D: {k_d:.2f}", "r")
+    killer_text = TextDisplay((w/2,h/2.5), fonts[64], lambda : f"Killed by {username(plr.killer)}", "c", (255,0,0))
+    respawn_text = TextDisplay((w/2,h/2.5+35), fonts[48], lambda : f"Respawn in {plr.respawn_timer // 60 + 1}s", "c")
+    pw_rapid_text = TextDisplay((w,h-25), fonts[48], lambda : "RAPID FIRE", "r", (255,0,0))
+    pw_triple_text = TextDisplay((w,h-55), fonts[48], lambda : "TRIPLE SHOT", "r", (255,0,0))
+    pw_speed_text = TextDisplay((w,h-85), fonts[48], lambda : "2X SPEED", "r", (255,0,0))
+
     send(["JOIN", plr.name, plr.pos, VERSION])
 
     while True:
@@ -226,20 +265,16 @@ if __name__ == "__main__":
                 particles.remove(p)
 
         chat_timer = max(chat_timer-1, chatting*180)
-        if chatting: pg.draw.rect(display, (16,16,16), [0, h-30, w, 30])
-        text = fonts[32].render(msg, True, (min(chat_timer*2,255),)*3)
-        display.blit(text, (10, h-25))
+        if chatting:
+            pg.draw.rect(display, (16,16,16), [0, h-30, w, 30])
+            curr_chat_text.draw(display)
         for i, m in enumerate(chat):
             if i >= 3 and chat_timer == 0: break
-            text = fonts[32].render(m, True, (255 if i < 3 else min(chat_timer*2,255),)*3)
-            display.blit(text, (10, h-30*(i+2)))
+            TextDisplay((10, h-30*(i+2)), fonts[32], lambda : m, "l", (255 if i < 3 else min(chat_timer*2,255),)*3).draw(display)
 
-        i = 0
-        for pw, timer in plr.powerups.items():
+        for (pw, timer), text in zip(plr.powerups.items(), [pw_rapid_text, pw_triple_text, pw_speed_text]):
             if timer > 0:
-                text = fonts[48].render({"rapid":"RAPID FIRE","triple":"TRIPLE SHOT","speed":"2X SPEED"}[pw], True, (255,0,0))
-                display.blit(text, (w-text.get_width()-random.random()*5, h-text.get_height()*(i+1)-random.random()*5))
-                i += 1
+                text.draw(display, [-random.random()*5, -random.random()*5])
 
         for pw in pwups:
             pg.draw.rect(display, np.array([255]) * colorsys.hsv_to_rgb((t/2+pw[0]/2000)%1, 1, 1), [pw[0]-15,pw[1]-15,30,30])
@@ -248,13 +283,9 @@ if __name__ == "__main__":
             pg.draw.rect(display, (255,128,128), [40*i+10, 10, 30, 30])
 
         if plr.respawn_timer > 0:
-            text1 = fonts[64].render(f"Killed by {username(plr.killer)}", True, (255,0,0))
-            text2 = fonts[48].render(f"Respawn in {plr.respawn_timer // 60 + 1}s", True, (255,255,255))
-            display.blit(text1, (w/2 - text1.get_rect().centerx, h/2.5))
-            display.blit(text2, (w/2 - text2.get_rect().centerx, h/2.5 + 35))
-            plr.pos = [-1000, -1000]
-        elif plr.respawn_timer == 0:
-            plr.pos = [960, 540]
+            killer_text.draw(display)
+            respawn_text.draw(display)
+            pass
 
         k_d = plr.kills / max(plr.deaths, 1)
         text = fonts[32].render(f"K/D: {k_d:.2f}", True, (255,255,255))
@@ -263,8 +294,7 @@ if __name__ == "__main__":
         for p in players:
             name = p[0]
             pg.draw.rect(display, (255*(name!=plr.name),127*(name==plr.name)*(1+(plr.iframes<=0)),0), [p[1][0]-20, p[1][1]-20, 40, 40])
-            text = fonts[32].render(username(name), True, (255,)*3)
-            display.blit(text, (p[1][0]-text.get_rect().centerx, p[1][1]-50))
+            TextDisplay((p[1][0], p[1][1]-50), fonts[32], lambda: username(name), "c").draw(display)
 
         for p in particles:
             p.draw()
