@@ -188,9 +188,11 @@ if __name__ == "__main__":
                     quit()
 
         keys = pg.key.get_pressed()
-        if not (chatting or plr.respawn_timer > 0 or frames % 3):
+        if not (chatting or plr.respawn_timer > 0):
             plr_input = pg.mouse.get_pressed()[0] * 16 + keys[pg.K_w] * 8 + keys[pg.K_a] * 4 + keys[pg.K_s] * 2 + keys[pg.K_d]
-            send(["INPUT", plr_input, pg.mouse.get_pos()])
+        else:
+            plr_input = 0
+        send(["INPUT", plr_input, pg.mouse.get_pos()])
 
         for exit_type, exit_msg in zip(exit_types, \
             ["You are banned from the server.", "You were kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}."]):
