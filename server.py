@@ -175,6 +175,8 @@ class GameServer:
                 if hit is not None:
                     if hit:
                         p = self.players[hit[0]]
+                        if p.iframes > 0:
+                            continue
                         p.hp -= 1
                         if p.hp <= 0:
                             self.chat(f"{username(hit[0])} was killed by {username(hit[1])}")

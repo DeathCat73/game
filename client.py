@@ -12,7 +12,7 @@ pg.init()
 
 
 class Player:
-    def __init__(self, username: str, position: tuple[int|float]):
+    def __init__(self, username: str, position: list[int|float]):
         self.name = username
         self.pos = position
         self.cooldown = 0
@@ -88,9 +88,9 @@ class Button:
     def update_input(self, buttons: list[int], pos: tuple[int]):
         self.hovered = self.r_g.rect.collidepoint(pos)
         if self.hovered and buttons[0] and not self.clicked:
-            pg.event.post(pg.event.Event(pg.KEYDOWN, {"key": self.name}))
+            pg.event.post(pg.event.Event(BUTTON_PRESSED, {"button": self.name}))
         elif self.hovered and self.clicked and not buttons[0]:
-            pg.event.post(pg.event.Event(pg.KEYUP, {"key": self.name}))
+            pg.event.post(pg.event.Event(BUTTON_RELEASED, {"button": self.name}))
         self.clicked = self.hovered and buttons[0]
 
     def draw(self, display: pg.Surface):
@@ -147,17 +147,22 @@ def recieve(output, stop_event: threading.Event):
     while True:
         if stop_event.is_set():
             return
-        data = sock.recv(4096)
+        data = sock.recv(999999)
         buffer += data
         items = buffer.split("\n".encode("utf-8"))
-        overflow = len(data) == 4096
-        if overflow:
+        overflow = len(data) == 999999 or items[-1] and chr(items[-1][-1]) not in "]}"
+        if overflow: #if this ever runs...
             print("Can't keep up with the server")
             # discard partially sent message
             items = items[:-1]
+        
         for item in items:
             if not item: continue
-            msg = json.loads(item)
+            try:
+                msg = json.loads(item)
+            except json.decoder.JSONDecodeError:
+                print("A message from the server couldn't be decoded:")
+                print(item)
             output[msg[0]] = msg[1]
             if msg[0] in exit_types:
                 return
@@ -183,7 +188,7 @@ if __name__ == "__main__":
     config = parser.parse_args()
 
     exit_types = ["BANNED", "KICK", "SHUTDOWN", "VERSION"]
-    exit_msg = ""
+    last_exit_msg = ""
 
     plr = Player(config.name, [960, 540])
 
@@ -202,9 +207,12 @@ if __name__ == "__main__":
                   TextDisplay((w/2, h/3+120), fonts[48], lambda : f"Username: {config.name}", "c"),
                   TextDisplay((w/2, h/3+160), fonts[48], lambda : f"Host: {config.host}", "c"),
                   TextDisplay((w/2, h/3+200), fonts[48], lambda : f"Port: {config.port}", "c", (128,128,128)),
-                  TextDisplay((w/2, h/2+100), fonts[48], lambda : f"{exit_msg}", "c", (255,0,0))]]
+                  TextDisplay((w/2, h/2+100), fonts[48], lambda : f"{last_exit_msg}", "c", (255,0,0))]]
 
     VERSION = 1.2
+    BUTTON_PRESSED, BUTTON_RELEASED = pg.event.custom_type(), pg.event.custom_type()
+    STATE_CHANGE = pg.event.custom_type()
+
     fps = 60
     state = "menu"
     players = dict()
@@ -240,9 +248,10 @@ if __name__ == "__main__":
                         if event.key == pg.K_ESCAPE:
                             pg.quit()
                             quit()
-                    elif event.type == pg.KEYUP:
-                        if event.key == "play":
+                    elif event.type == BUTTON_RELEASED:
+                        if event.button == "play":
                             state = "game"
+                            pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "menu", "new": "game"}))
 
                             sock = socket.create_connection((config.host, config.port))
                             recieved = {"players": dict(), 
@@ -257,14 +266,22 @@ if __name__ == "__main__":
                             thread_exc = None
 
                             send(["JOIN", plr.name, plr.pos, VERSION])
+                    elif event.type == STATE_CHANGE:
+                        chat_timer = 120
+                        plr.name = config.name
                 
+                main_menu[1][4].col = (min(255, chat_timer*4),0,0)
+
                 mouse = pg.mouse.get_pressed()
                 mpos = pg.mouse.get_pos()
+
                 for button in main_menu[0]:
                     button.update_input(mouse, mpos)
                     button.draw(display)
                 for text in main_menu[1]:
                     text.draw(display)
+
+                chat_timer = max(chat_timer-1, 0)
 
             case "game":
                 t = time.perf_counter()
@@ -275,9 +292,9 @@ if __name__ == "__main__":
                     if event.type == pg.QUIT:
                         left.set()
                         send(["QUIT"])
-                        print("You left the server.")
+                        last_exit_msg = "You left the server."
                         state = "menu"
-                        plr.name = config.name
+                        pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
                     elif event.type == pg.KEYDOWN:
                         if chatting:
                             if event.key == pg.K_ESCAPE:
@@ -296,9 +313,9 @@ if __name__ == "__main__":
                         elif event.key == pg.K_ESCAPE:
                             left.set()
                             send(["QUIT"])
-                            print("You left the server.")
+                            last_exit_msg = "You left the server."
                             state = "menu"
-                            plr.name = config.name
+                            pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
                 if state != "game":
                     left.clear()
                     continue
@@ -318,8 +335,9 @@ if __name__ == "__main__":
                             send(["QUIT"])
                         if exit_type == "VERSION":
                             exit_msg = exit_msg.format(VERSION, recieved.get("VERSION", "unknown"))
-                        exit_msg = exit_type
+                        last_exit_msg = exit_msg
                         state = "menu"
+                        pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
                 if state != "game": continue
                 
                 players = recieved["players"]
@@ -328,7 +346,6 @@ if __name__ == "__main__":
                 projs = recieved["projs"]
 
                 if recieved["plr"] is not None:
-                    # replacing whole dict would break at start if its even allowed
                     for key, val in recieved["plr"].items():
                         plr.__dict__[key] = val
 
@@ -369,7 +386,11 @@ if __name__ == "__main__":
 
                 for p in players:
                     name = p[0]
-                    pg.draw.rect(display, (255*(name!=plr.name),127*(name==plr.name)*(1+(plr.iframes<=0)),0), [p[1][0]-20, p[1][1]-20, 40, 40])
+                    col = (255,0,0)
+                    if name == plr.name:
+                        col = (0,127*(1+(plr.iframes<=0)),0)
+                        p[1] = plr.pos
+                    pg.draw.rect(display, col, [p[1][0]-20, p[1][1]-20, 40, 40])
                     TextDisplay((p[1][0], p[1][1]-50), fonts[32], lambda: username(name), "c").draw(display)
 
                 for p in particles:
