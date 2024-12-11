@@ -36,3 +36,4 @@ jobs:
             name: aci-sampleapp
             location: 'uksouth'
             ports: 38491
+            cpu: 2
