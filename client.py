@@ -86,9 +86,7 @@ class Button:
         self.clicked = False
 
     def update_input(self, buttons: list[int], pos: tuple[int]):
-        print(buttons, pos)
         self.hovered = self.r_g.rect.collidepoint(pos)
-        print(self.hovered)
         if self.hovered and buttons[0] and not self.clicked:
             pg.event.post(pg.event.Event(pg.KEYDOWN, {"key": self.name}))
         elif self.hovered and self.clicked and not buttons[0]:
@@ -302,7 +300,6 @@ if __name__ == "__main__":
                             state = "menu"
                             plr.name = config.name
                 if state != "game":
-                    #sock.close()
                     left.clear()
                     continue
 
