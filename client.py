@@ -140,7 +140,7 @@ class TextInput:
         if event.type != pg.KEYDOWN:
             return
         
-        if event.key == pg.K_KP_ENTER:
+        if event.key == pg.K_RETURN:
             pg.event.post(pg.event.Event(TEXT_ENTERED, {"field": self.name, "text": self.text}))
         elif event.key == pg.K_BACKSPACE:
             if self.text:
@@ -179,21 +179,13 @@ class UI:
         self.texts = texts
         self.buttons = buttons
         self.inputs = inputs
-
-    def get_element(self, name: str, type: str = "any"):
-        match type:
-            case "text":
-                elements = self.texts
-            case "button":
-                elements = self.buttons
-            case "input":
-                elements = self.inputs
-            case "any":
-                elements = self.texts + self.buttons + self.inputs
+    
+    def __getitem__(self, key):
+        elements = self.texts + self.buttons + self.inputs
         for e in elements:
-            if e.name == name:
+            if e.name == key:
                 return e
-        raise ValueError(f"No {type} element named {name}.")
+        raise ValueError(f"No element named {name}.")
     
     def draw_all(self, display):
         for e in self.texts + self.buttons + self.inputs:
@@ -223,11 +215,22 @@ def send(data):
     t.start()
 
 def recieve(output, stop_event: threading.Event):
+    global error_msg, error_timer
     buffer = bytes()
     while True:
         if stop_event.is_set():
             return
-        data = sock.recv(999999)
+        
+        try:
+            data = sock.recv(999999)
+            error_timer = 0
+        except TimeoutError:
+            if stop_event.is_set():
+                return
+            error_msg = "Lost connection"
+            error_timer = 180
+            continue
+
         buffer += data
         items = buffer.split("\n".encode("utf-8"))
         overflow = len(data) == 999999 or items[-1] and chr(items[-1][-1]) not in "]}"
@@ -316,18 +319,22 @@ if __name__ == "__main__":
     chatting = False
     msg = ""
     chat_timer = 180
+    error_timer = 180
     left = threading.Event()
     last_death = ["", 0]
     particles = []
 
-    curr_chat_text = TextDisplay("msg", (10,h-25), fonts[32], lambda : msg, "l", (min(chat_timer*2,255),)*3)
-    kd_text = TextDisplay("k/d", (w,0), fonts[32], lambda : f"K/D: {k_d:.2f}", "r")
-    killer_text = TextDisplay("killer", (w/2,h/2.5), fonts[64], lambda : f"Killed by {username(plr.killer)}", "c", (255,0,0))
-    respawn_text = TextDisplay("respawn", (w/2,h/2.5+35), fonts[48], lambda : f"Respawn in {plr.respawn_timer // 60 + 1}s", "c")
-    pw_rapid_text = TextDisplay("rapid", (w,h-25), fonts[48], lambda : "RAPID FIRE", "r", (255,0,0))
-    pw_triple_text = TextDisplay("triple", (w,h-55), fonts[48], lambda : "TRIPLE SHOT", "r", (255,0,0))
-    pw_speed_text = TextDisplay("speed", (w,h-85), fonts[48], lambda : "2X SPEED", "r", (255,0,0))
-
+    game_ui = UI([TextDisplay("k/d", (w,0), fonts[32], lambda : f"K/D: {k_d:.2f}", "r"),
+                  TextDisplay("killer", (w/2,h/2.5), fonts[64], lambda : f"Killed by {username(plr.killer)}", "c", (255,0,0)),
+                  TextDisplay("respawn", (w/2,h/2.5+35), fonts[48], lambda : f"Respawn in {plr.respawn_timer // 60 + 1}s", "c"),
+                  TextDisplay("rapid", (w,h-25), fonts[48], lambda : "RAPID FIRE", "r", (255,0,0)),
+                  TextDisplay("triple", (w,h-55), fonts[48], lambda : "TRIPLE SHOT", "r", (255,0,0)),
+                  TextDisplay("speed", (w,h-85), fonts[48], lambda : "2X SPEED", "r", (255,0,0)),
+                  TextDisplay("error", (w/2,0), fonts[32], lambda : error_msg, "c", (255,0,0))],
+                 [],
+                 [TextInput("curr_chat_msg",
+                            RectGraphic(pg.Rect(0,h-30,w,30), [(32,32,32),(0,0,0)], -1),
+                            TextDisplay("curr_chat_text", (0,h-30), fonts[32], lambda : "", "l"))])
 
     while True:
         display.fill(0)
@@ -359,10 +366,10 @@ if __name__ == "__main__":
                     elif event.type == BUTTON_RELEASED:
                         if event.button == "play":
                             try:
-                                sock = socket.create_connection((config.host, config.port), timeout=5)
+                                sock = socket.create_connection((config.host, config.port), timeout=2)
                             except (ConnectionRefusedError, TimeoutError, OSError, socket.gaierror):
                                 error_msg = "Failed to connect."
-                                chat_timer = 120
+                                error_timer = 120
                                 continue
 
                             state = "game"
@@ -375,25 +382,25 @@ if __name__ == "__main__":
                                         "plr": None,
                                         "death": ["", 0]}
                             
-                            recv_t = threading.Thread(target=recieve, args=[recieved, left], daemon=True)
+                            left.clear()
+                            recv_t = ExcPropagateThread(target=recieve, args=[recieved, left], daemon=True)
                             recv_t.start()
                             thread_exc = None
 
                             send(["JOIN", plr.name, plr.pos, VERSION])
                     elif event.type == STATE_CHANGE:
-                        left.clear()
-                        chat_timer = 120
+                        error_timer = 120
                         plr.name = config.name
 
-                config.name = main_menu.get_element("username").text
-                config.host = main_menu.get_element("host").text
+                config.name = main_menu["username"].text
+                config.host = main_menu["host"].text
                 try:
-                    config.port = int(main_menu.get_element("port").text)
+                    config.port = int(main_menu["port"].text)
                 except ValueError:
                     error_msg = "Port should be an integer"
-                    chat_timer = 50
+                    error_timer = 50
                 
-                main_menu.get_element("error", "text").col = (min(255, chat_timer*4),0,0)
+                main_menu["error"].col = (min(255, error_timer*4),0,0)
 
                 mouse = pg.mouse.get_pressed()
                 mpos = pg.mouse.get_pos()
@@ -402,7 +409,7 @@ if __name__ == "__main__":
 
                 main_menu.draw_all(display)
 
-                chat_timer = max(chat_timer-1, 0)
+                error_timer = max(error_timer-1, 0)
 
             case "game":
                 t = time.perf_counter()
@@ -429,15 +436,9 @@ if __name__ == "__main__":
                         if chatting:
                             if event.key == pg.K_ESCAPE:
                                 chatting = False
-                                msg = ""
-                            elif event.key == 13:
-                                chatting = False
-                                send(["CHAT", msg])
-                                msg = ""
-                            elif event.key == pg.K_BACKSPACE:
-                                msg = msg[:-1]
+                                game_ui["curr_chat_msg"].text = ""
                             else:
-                                msg += event.unicode
+                                game_ui["curr_chat_msg"].input(event)
                         elif event.key == pg.K_t:
                             chatting = True
                         elif event.key == pg.K_ESCAPE:
@@ -446,6 +447,11 @@ if __name__ == "__main__":
                             error_msg = "You left the server."
                             state = "menu"
                             pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
+                    elif event.type == TEXT_ENTERED:
+                        if event.field == "curr_chat_msg":
+                            chatting = False
+                            send(["CHAT", game_ui["curr_chat_msg"].text])
+                            game_ui["curr_chat_msg"].text = ""
                 if state != "game": continue
 
                 keys = pg.key.get_pressed()
@@ -487,14 +493,14 @@ if __name__ == "__main__":
                         particles.remove(p)
 
                 chat_timer = max(chat_timer-1, chatting*180)
+                error_timer = max(error_timer-1, 0)
                 if chatting:
-                    pg.draw.rect(display, (16,16,16), [0, h-30, w, 30])
-                    curr_chat_text.draw(display)
+                    game_ui["curr_chat_msg"].draw(display)
                 for i, m in enumerate(chat):
                     if i >= 3 and chat_timer == 0: break
                     TextDisplay((10, h-30*(i+2)), fonts[32], lambda : m, "l", (255 if i < 3 else min(chat_timer*2,255),)*3).draw(display)
 
-                for (pw, timer), text in zip(plr.powerups.items(), [pw_rapid_text, pw_triple_text, pw_speed_text]):
+                for (pw, timer), text in zip(plr.powerups.items(), [game_ui[x] for x in ["rapid", "triple", "speed"]]):
                     if timer > 0:
                         text.draw(display, [-random.random()*5, -random.random()*5])
 
@@ -505,12 +511,12 @@ if __name__ == "__main__":
                     pg.draw.rect(display, (255,128,128), [40*i+10, 10, 30, 30])
 
                 if plr.respawn_timer > 0:
-                    killer_text.draw(display)
-                    respawn_text.draw(display)
+                    game_ui["killer"].draw(display)
+                    game_ui["respawn"].draw(display)
                     pass
 
                 k_d = plr.kills / max(plr.deaths, 1)
-                kd_text.draw(display)
+                game_ui["k/d"].draw(display)
 
                 for p in players:
                     name = p[0]
@@ -526,6 +532,9 @@ if __name__ == "__main__":
 
                 for pr in projs:
                     pg.draw.rect(display, (255,)*3, [pr[0]-5,pr[1]-5,10,10])
+
+                game_ui["error"].col = (min(error_timer*4, 255), 0, 0)
+                game_ui["error"].draw(display)
 
         pg.display.update()
         clock.tick(fps)
