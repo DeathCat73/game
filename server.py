@@ -267,7 +267,7 @@ class GameServer:
                             if msg[3] != self.VERSION:
                                 send(conn, ["VERSION", self.VERSION])
                         case "INPUT":
-                            if full_name is not None:
+                            if name is not None:
                                 x = msg[1]
                                 plr.shooting = x >= 16
                                 plr.mvmt = x % 16

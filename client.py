@@ -35,7 +35,13 @@ class Player:
     
 
 class TextDisplay:
-    def __init__(self, position=(0,0), font=pg.font.Font(None,32), text_func=lambda : "Hello, world!", align="l", col=(255,255,255), bg_col=None):
+    def __init__(self, name, position=(0,0), font=pg.font.Font(None,32), text_func=lambda : "Hello, world!", align="l", col=(255,255,255), bg_col=None):
+        """
+        usage of lambda re-evaluates text each draw()
+        allowing variables in text and complex text with whole functions
+        """
+
+        self.name = name
         self.pos = np.array(position)
         self.align = align
         self.font = font
@@ -97,6 +103,58 @@ class Button:
         self.r_g.colours = self.cols[self.hovered+self.clicked]
         self.r_g.draw(display)
         self.t_d.draw(display)
+
+
+class TextInput:
+    def __init__(self, name: str, rect_graph: RectGraphic, text_disp: TextDisplay, default_text: str = "", default_type: str = "pre"):
+        """
+        default_types:
+        'pre': field is pre-filled with default_text
+        'info': field contains default_text if otherwise empty
+        """
+
+        self.name = name
+        self.timer = 0
+        self.text = ""
+        self.selected = False
+
+        self.default_text = default_text
+        self.default_type = default_type
+        self.r_g = rect_graph
+        self.t_d = text_disp
+        self.t_d.text_func = self.inner_text
+
+        if self.default_type == "pre":
+            self.text = self.default_text
+
+    def inner_text(self):
+        if self.text == "" and self.default_type == "info":
+            return self.default_text
+        else:
+            text = self.text
+            if self.timer % 60 < 30 and self.selected:
+                text += "|"
+            return text
+
+    def input(self, event: pg.event.Event):
+        if event.type != pg.KEYDOWN:
+            return
+        
+        if event.key == pg.K_KP_ENTER:
+            pg.event.post(pg.event.Event(TEXT_ENTERED, {"field": self.name, "text": self.text}))
+        elif event.key == pg.K_BACKSPACE:
+            if self.text:
+                self.text = self.text[:-1]
+        else:
+            self.text += event.unicode
+
+    def draw(self, display: pg.Surface):
+        if self.selected:
+            self.timer += 1
+        else:
+            self.timer = -1
+        self.r_g.draw(display)
+        self.t_d.draw(display)
     
 
 class Particle:
@@ -114,6 +172,32 @@ class Particle:
     
     def draw(self):
         pg.draw.rect(display, (min(255,255*(90-self.age)/60),0,0), [self.pos-5, [10,10]])
+
+
+class UI:
+    def __init__(self, texts: list[TextDisplay], buttons: list[Button], inputs: list[TextInput]):
+        self.texts = texts
+        self.buttons = buttons
+        self.inputs = inputs
+
+    def get_element(self, name: str, type: str = "any"):
+        match type:
+            case "text":
+                elements = self.texts
+            case "button":
+                elements = self.buttons
+            case "input":
+                elements = self.inputs
+            case "any":
+                elements = self.texts + self.buttons + self.inputs
+        for e in elements:
+            if e.name == name:
+                return e
+        raise ValueError(f"No {type} element named {name}.")
+    
+    def draw_all(self, display):
+        for e in self.texts + self.buttons + self.inputs:
+            e.draw(display)
 
 
 class ExcPropagateThread(threading.Thread):
@@ -135,14 +219,10 @@ class ExcPropagateThread(threading.Thread):
     
 
 def send(data):
-    if thread_exc:
-        raise thread_exc
-    
     t = ExcPropagateThread(target=sock.send, args=[("\n" + json.dumps(data)).encode("utf-8")], daemon=True)
     t.start()
 
 def recieve(output, stop_event: threading.Event):
-
     buffer = bytes()
     while True:
         if stop_event.is_set():
@@ -163,6 +243,7 @@ def recieve(output, stop_event: threading.Event):
             except json.decoder.JSONDecodeError:
                 print("A message from the server couldn't be decoded:")
                 print(item)
+                continue
             output[msg[0]] = msg[1]
             if msg[0] in exit_types:
                 return
@@ -182,39 +263,52 @@ def username(name: str):
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--name", type=str, required=True)
+    parser.add_argument("--name", type=str, default="Player")
     parser.add_argument("--host", type=str, default="127.0.0.1")
     parser.add_argument("--port", type=int, default=38491)
     config = parser.parse_args()
 
     exit_types = ["BANNED", "KICK", "SHUTDOWN", "VERSION"]
-    last_exit_msg = ""
+    error_msg = ""
 
     plr = Player(config.name, [960, 540])
 
     pg.init()
     w, h = 1920, 1080
-    display = pg.display.set_mode((w, h), pg.HWACCEL | pg.NOFRAME)
+    display = pg.display.set_mode((w, h), pg.NOFRAME | pg.SCALED)
     clock = pg.time.Clock()
     fonts = {size: pg.font.Font(None, size) for size in [32,48,64]}
 
-    main_menu = [[Button("play",
-                         RectGraphic(pg.Rect(w/2 - 100, h/3, 200, 100), [(0,128,0),(0,255,0)], 10),
-                         TextDisplay((w/2,h/3+20), pg.font.Font(None, 96), lambda : "PLAY", "c"),
-                         [(0,64,0),(0,192,0)],
-                         [(0,192,0),(64,255,64)])],
-                 [TextDisplay((w/2,h/10), pg.font.Font(None, 128), lambda : "SOCKET TEST PROJECT", "c"),
-                  TextDisplay((w/2, h/3+120), fonts[48], lambda : f"Username: {config.name}", "c"),
-                  TextDisplay((w/2, h/3+160), fonts[48], lambda : f"Host: {config.host}", "c"),
-                  TextDisplay((w/2, h/3+200), fonts[48], lambda : f"Port: {config.port}", "c", (128,128,128)),
-                  TextDisplay((w/2, h/2+100), fonts[48], lambda : f"{last_exit_msg}", "c", (255,0,0))]]
+    main_menu = UI([TextDisplay("title", (w/2,h/10), pg.font.Font(None, 128), lambda : "SOCKET TEST PROJECT", "c"),
+                    TextDisplay("error", (w/2, h/2+100), fonts[48], lambda : f"{error_msg}", "c", (255,0,0)),
+                    TextDisplay("username_label", (w/2-150, h/3+120), fonts[48], lambda : "Username:", "l"),
+                    TextDisplay("host_label", (w/2-150, h/3+160), fonts[48], lambda : "Host:", "l"),
+                    TextDisplay("port_label", (w/2-150, h/3+200), fonts[48], lambda : "Port:", "l", (128,128,128))],
+                   [Button("play",
+                            RectGraphic(pg.Rect(w/2-100,h/3,200,100),[(0,128,0),(0,255,0)],10),
+                            TextDisplay("play_text", (w/2,h/3+20), pg.font.Font(None, 96), lambda : "PLAY", "c"),
+                            [(0,64,0),(0,192,0)], [(0,192,0),(64,255,64)])],
+                   [TextInput("username",
+                              RectGraphic(pg.Rect(w/2+50,h/3+120,300,35),[(64,64,64),(0,0,0)],-1),
+                              TextDisplay("username_text", (w/2+50, h/3+120), fonts[48], lambda : "", "l"),
+                              f"{config.name}", "pre"),
+                    TextInput("host",
+                              RectGraphic(pg.Rect(w/2+50,h/3+160,300,35),[(64,64,64),(0,0,0)],-1),
+                              TextDisplay("host_text", (w/2+50, h/3+160), fonts[48], lambda : "", "l"),
+                              f"{config.host}", "pre"),
+                    TextInput("port",
+                              RectGraphic(pg.Rect(w/2+50,h/3+200,300,35),[(32,32,32),(0,0,0)],-1),
+                              TextDisplay("port_text", (w/2+50, h/3+200), fonts[48], lambda : "", "l", (128,128,128)),
+                              f"{config.port}", "pre"),])
 
     VERSION = 1.2
     BUTTON_PRESSED, BUTTON_RELEASED = pg.event.custom_type(), pg.event.custom_type()
     STATE_CHANGE = pg.event.custom_type()
+    TEXT_ENTERED = pg.event.custom_type()
 
     fps = 60
     state = "menu"
+    selected_input = None
     players = dict()
     chat = []
     pwups = []
@@ -226,13 +320,13 @@ if __name__ == "__main__":
     last_death = ["", 0]
     particles = []
 
-    curr_chat_text = TextDisplay((10,h-25), fonts[32], lambda : msg, "l", (min(chat_timer*2,255),)*3)
-    kd_text = TextDisplay((w,0), fonts[32], lambda : f"K/D: {k_d:.2f}", "r")
-    killer_text = TextDisplay((w/2,h/2.5), fonts[64], lambda : f"Killed by {username(plr.killer)}", "c", (255,0,0))
-    respawn_text = TextDisplay((w/2,h/2.5+35), fonts[48], lambda : f"Respawn in {plr.respawn_timer // 60 + 1}s", "c")
-    pw_rapid_text = TextDisplay((w,h-25), fonts[48], lambda : "RAPID FIRE", "r", (255,0,0))
-    pw_triple_text = TextDisplay((w,h-55), fonts[48], lambda : "TRIPLE SHOT", "r", (255,0,0))
-    pw_speed_text = TextDisplay((w,h-85), fonts[48], lambda : "2X SPEED", "r", (255,0,0))
+    curr_chat_text = TextDisplay("msg", (10,h-25), fonts[32], lambda : msg, "l", (min(chat_timer*2,255),)*3)
+    kd_text = TextDisplay("k/d", (w,0), fonts[32], lambda : f"K/D: {k_d:.2f}", "r")
+    killer_text = TextDisplay("killer", (w/2,h/2.5), fonts[64], lambda : f"Killed by {username(plr.killer)}", "c", (255,0,0))
+    respawn_text = TextDisplay("respawn", (w/2,h/2.5+35), fonts[48], lambda : f"Respawn in {plr.respawn_timer // 60 + 1}s", "c")
+    pw_rapid_text = TextDisplay("rapid", (w,h-25), fonts[48], lambda : "RAPID FIRE", "r", (255,0,0))
+    pw_triple_text = TextDisplay("triple", (w,h-55), fonts[48], lambda : "TRIPLE SHOT", "r", (255,0,0))
+    pw_speed_text = TextDisplay("speed", (w,h-85), fonts[48], lambda : "2X SPEED", "r", (255,0,0))
 
 
     while True:
@@ -244,16 +338,36 @@ if __name__ == "__main__":
                     if event.type == pg.QUIT:
                         pg.quit()
                         quit()
+                    elif event.type == pg.MOUSEBUTTONDOWN:
+                        pos = pg.mouse.get_pos()
+                        if event.button == 1:
+                            if selected_input is not None:
+                                selected_input.selected = False
+                            for inp in main_menu.inputs:
+                                if inp.r_g.rect.collidepoint(pos):
+                                    inp.selected = True
+                                    selected_input = inp
+                                    break
+                            else:
+                                selected_input = None
                     elif event.type == pg.KEYDOWN:
                         if event.key == pg.K_ESCAPE:
                             pg.quit()
                             quit()
+                        elif selected_input is not None:
+                            selected_input.input(event)
                     elif event.type == BUTTON_RELEASED:
                         if event.button == "play":
+                            try:
+                                sock = socket.create_connection((config.host, config.port), timeout=5)
+                            except (ConnectionRefusedError, TimeoutError, OSError, socket.gaierror):
+                                error_msg = "Failed to connect."
+                                chat_timer = 120
+                                continue
+
                             state = "game"
                             pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "menu", "new": "game"}))
 
-                            sock = socket.create_connection((config.host, config.port))
                             recieved = {"players": dict(), 
                                         "chat": [],
                                         "pwups": [],
@@ -267,19 +381,26 @@ if __name__ == "__main__":
 
                             send(["JOIN", plr.name, plr.pos, VERSION])
                     elif event.type == STATE_CHANGE:
+                        left.clear()
                         chat_timer = 120
                         plr.name = config.name
+
+                config.name = main_menu.get_element("username").text
+                config.host = main_menu.get_element("host").text
+                try:
+                    config.port = int(main_menu.get_element("port").text)
+                except ValueError:
+                    error_msg = "Port should be an integer"
+                    chat_timer = 50
                 
-                main_menu[1][4].col = (min(255, chat_timer*4),0,0)
+                main_menu.get_element("error", "text").col = (min(255, chat_timer*4),0,0)
 
                 mouse = pg.mouse.get_pressed()
                 mpos = pg.mouse.get_pos()
-
-                for button in main_menu[0]:
+                for button in main_menu.buttons:
                     button.update_input(mouse, mpos)
-                    button.draw(display)
-                for text in main_menu[1]:
-                    text.draw(display)
+
+                main_menu.draw_all(display)
 
                 chat_timer = max(chat_timer-1, 0)
 
@@ -288,11 +409,20 @@ if __name__ == "__main__":
 
                 send(["UPDATE"])
 
+                if thread_exc:
+                    if type(thread_exc) in (ConnectionAbortedError, ConnectionResetError, OSError):
+                        left.set()
+                        error_msg = "You disconnected from the server."
+                        state = "menu"
+                        pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
+                    else:
+                        raise thread_exc
+
                 for event in pg.event.get():
                     if event.type == pg.QUIT:
                         left.set()
                         send(["QUIT"])
-                        last_exit_msg = "You left the server."
+                        error_msg = "You left the server."
                         state = "menu"
                         pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
                     elif event.type == pg.KEYDOWN:
@@ -313,12 +443,10 @@ if __name__ == "__main__":
                         elif event.key == pg.K_ESCAPE:
                             left.set()
                             send(["QUIT"])
-                            last_exit_msg = "You left the server."
+                            error_msg = "You left the server."
                             state = "menu"
                             pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
-                if state != "game":
-                    left.clear()
-                    continue
+                if state != "game": continue
 
                 keys = pg.key.get_pressed()
                 if not (chatting or plr.respawn_timer > 0):
@@ -335,7 +463,7 @@ if __name__ == "__main__":
                             send(["QUIT"])
                         if exit_type == "VERSION":
                             exit_msg = exit_msg.format(VERSION, recieved.get("VERSION", "unknown"))
-                        last_exit_msg = exit_msg
+                        error_msg = exit_msg
                         state = "menu"
                         pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
                 if state != "game": continue
