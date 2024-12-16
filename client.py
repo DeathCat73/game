@@ -7,6 +7,7 @@ import colorsys
 import numpy as np
 import random
 import argparse
+import math
 
 pg.init()
 
@@ -49,15 +50,17 @@ class TextDisplay:
         self.col = col
         self.bg_col = bg_col
 
-    def draw(self, display: pg.Surface, offset: list[int|float] = [0,0]):
+    def draw(self, display: pg.Surface, offset: list[int|float] = [0,0], scale: int|float = 1):
         surf = self.font.render(self.text_func(), True, self.col, self.bg_col)
+        if scale != 1:
+            surf = pg.transform.scale_by(surf, scale)
         match self.align:
             case "l":
                 pass
             case "r":
                 offset[0] -= surf.get_width()
             case "c":
-                offset[0] -= surf.get_rect().centerx
+                offset[0] -= surf.get_width()/2
         display.blit(surf, self.pos + offset)
         match self.align:
             case "l":
@@ -65,7 +68,7 @@ class TextDisplay:
             case "r":
                 offset[0] += surf.get_width()
             case "c":
-                offset[0] += surf.get_rect().centerx
+                offset[0] += surf.get_width()/2
         # mutability jank
 
 
@@ -110,7 +113,7 @@ class TextInput:
         """
         default_types:
         'pre': field is pre-filled with default_text
-        'info': field contains default_text if otherwise empty
+        'info': field contains default_text if empty and not selected
         """
 
         self.name = name
@@ -128,7 +131,7 @@ class TextInput:
             self.text = self.default_text
 
     def inner_text(self):
-        if self.text == "" and self.default_type == "info":
+        if self.default_type == "info" and not (self.selected or self.text):
             return self.default_text
         else:
             text = self.text
@@ -187,9 +190,10 @@ class UI:
                 return e
         raise ValueError(f"No element named {name}.")
     
-    def draw_all(self, display):
+    def draw_all(self, display, exclude: list[str] = []):
         for e in self.texts + self.buttons + self.inputs:
-            e.draw(display)
+            if e.name not in exclude:
+                e.draw(display)
 
 
 class ExcPropagateThread(threading.Thread):
@@ -273,16 +277,17 @@ if __name__ == "__main__":
 
     exit_types = ["BANNED", "KICK", "SHUTDOWN", "VERSION"]
     error_msg = ""
+    error_timer = 180
 
     plr = Player(config.name, [960, 540])
-
-    pg.init()
     w, h = 1920, 1080
     display = pg.display.set_mode((w, h), pg.NOFRAME | pg.SCALED)
     clock = pg.time.Clock()
     fonts = {size: pg.font.Font(None, size) for size in [32,48,64]}
+    splash = random.choice(open("splash.txt", "rt").readlines())[:-1]
 
     main_menu = UI([TextDisplay("title", (w/2,h/10), pg.font.Font(None, 128), lambda : "SOCKET TEST PROJECT", "c"),
+                    TextDisplay("splash", (w*2/3,h/5), fonts[48], lambda : splash, "c", (255,255,0)),
                     TextDisplay("error", (w/2, h/2+100), fonts[48], lambda : f"{error_msg}", "c", (255,0,0)),
                     TextDisplay("username_label", (w/2-150, h/3+120), fonts[48], lambda : "Username:", "l"),
                     TextDisplay("host_label", (w/2-150, h/3+160), fonts[48], lambda : "Host:", "l"),
@@ -319,7 +324,6 @@ if __name__ == "__main__":
     chatting = False
     msg = ""
     chat_timer = 180
-    error_timer = 180
     left = threading.Event()
     last_death = ["", 0]
     particles = []
@@ -342,6 +346,7 @@ if __name__ == "__main__":
         match state:
             case "menu":
                 for event in pg.event.get():
+                    # python thinks custom event types are irrefutable preventing usage of match/case with multiple of them
                     if event.type == pg.QUIT:
                         pg.quit()
                         quit()
@@ -365,6 +370,9 @@ if __name__ == "__main__":
                             selected_input.input(event)
                     elif event.type == BUTTON_RELEASED:
                         if event.button == "play":
+                            if error_timer == 49:
+                                # questionable check for config problems
+                                continue
                             try:
                                 sock = socket.create_connection((config.host, config.port), timeout=2)
                             except (ConnectionRefusedError, TimeoutError, OSError, socket.gaierror):
@@ -393,6 +401,9 @@ if __name__ == "__main__":
                         plr.name = config.name
 
                 config.name = main_menu["username"].text
+                if not config.name:
+                    error_msg = "Please enter a username"
+                    error_timer = 50
                 config.host = main_menu["host"].text
                 try:
                     config.port = int(main_menu["port"].text)
@@ -407,7 +418,8 @@ if __name__ == "__main__":
                 for button in main_menu.buttons:
                     button.update_input(mouse, mpos)
 
-                main_menu.draw_all(display)
+                main_menu.draw_all(display, ["splash"])
+                main_menu["splash"].draw(display, [0,0], 1.1-0.1*abs(math.sin(time.time()*5)))
 
                 error_timer = max(error_timer-1, 0)
 

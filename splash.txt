@@ -1,0 +1,7 @@
+Minecraft ahh splash text!
+Off-center bouncing!
+b'<head><title>400 Bad Request</title></head>\r'!
+Not colormatic, only yellow!
+Also try server.py!
+Scaled by 1.1-0.1*abs(sin(t*5))!
+No anti-aliasing!
