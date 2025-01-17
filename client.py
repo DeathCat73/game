@@ -510,7 +510,7 @@ if __name__ == "__main__":
                     game_ui["curr_chat_msg"].draw(display)
                 for i, m in enumerate(chat):
                     if i >= 3 and chat_timer == 0: break
-                    TextDisplay((10, h-30*(i+2)), fonts[32], lambda : m, "l", (255 if i < 3 else min(chat_timer*2,255),)*3).draw(display)
+                    TextDisplay(f"chat-{i}", (10, h-30*(i+2)), fonts[32], lambda : m, "l", (255 if i < 3 else min(chat_timer*2,255),)*3).draw(display)
 
                 for (pw, timer), text in zip(plr.powerups.items(), [game_ui[x] for x in ["rapid", "triple", "speed"]]):
                     if timer > 0:
@@ -537,7 +537,7 @@ if __name__ == "__main__":
                         col = (0,127*(1+(plr.iframes<=0)),0)
                         p[1] = plr.pos
                     pg.draw.rect(display, col, [p[1][0]-20, p[1][1]-20, 40, 40])
-                    TextDisplay((p[1][0], p[1][1]-50), fonts[32], lambda: username(name), "c").draw(display)
+                    TextDisplay(f"nametag-{name}", (p[1][0], p[1][1]-50), fonts[32], lambda: username(name), "c").draw(display)
 
                 for p in particles:
                     p.draw()
