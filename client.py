@@ -434,6 +434,7 @@ if __name__ == "__main__":
                         error_msg = "You disconnected from the server."
                         state = "menu"
                         pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
+                        thread_exc = None
                     else:
                         raise thread_exc
 
