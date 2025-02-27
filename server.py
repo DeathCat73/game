@@ -107,21 +107,19 @@ def send(conn, msgs):
 
 class GameServer:
     def __init__(self, name="server", port=38491):
-        self.VERSION = 1.2
+        self.VERSION = 1.3
         self.name = name
         self.threads = []
         self.sock = socket.create_server(("", port))
         self.players = dict()
-        self.chat_hist = [f"SERVER {self.name}: Started."]
         self.projectiles = []
         self.powerups = []
         self.send_queue = []
 
     def chat(self, msg):
         print(msg)
-        self.chat_hist.insert(0,msg)
-        while len("  ".join(self.chat_hist)) > 3500:
-            self.chat_hist = self.chat_hist[:-1]
+        for p in self.players:
+            self.send_queue.append([p, ["EVENT", "CHAT", msg]])
 
     def run_game(self, gui=False):
         pg.init()
@@ -144,7 +142,7 @@ class GameServer:
                         pg.quit()
                         time.sleep(1)
                         for plr in self.players:
-                            self.send_queue.append([plr, ["SHUTDOWN", 1]])
+                            self.send_queue.append([plr, ["EXIT", "SHUTDOWN", 1]])
                         print("game stopped")
                         return
                     elif event.type == pg.MOUSEBUTTONDOWN:
@@ -154,11 +152,9 @@ class GameServer:
                                 plr = list(self.players.keys())[pos[1]//25-2]
                                 if event.button == 1:
                                     self.chat(f"{username(plr)} was kicked.")
-                                    self.send_queue.append([plr, ["KICK", 1]])
+                                    self.send_queue.append([plr, ["EXIT", "KICK", 1]])
                             else:
-                                [self.projectiles, self.powerups, self.send_queue, self.chat_hist][pos[1]//25].clear()
-                                if not self.chat_hist:
-                                    self.chat(f"SERVER {self.name}: Chat cleared.")
+                                [self.projectiles, self.powerups, self.send_queue][pos[1]//25].clear()
                         except IndexError:
                             pass
 
@@ -190,8 +186,7 @@ class GameServer:
                                 p.powerups[pwup] = 0
 
                             for plr in self.players:
-                                self.send_queue.append([plr, ["death", [p.name, time.time()]]])
-                                # time used as per-event identifier
+                                self.send_queue.append([plr,["EVENT", "DEATH", p]])
                     self.projectiles.remove(pr)
 
             for name, p in self.players.items():
@@ -214,8 +209,8 @@ class GameServer:
                 for i, p in enumerate(self.players.keys()):
                     text = font.render(p, True, (255,255,255))
                     display.blit(text, (0, (i+2)*25))
-                for i, (item, text) in enumerate(zip([self.projectiles, self.powerups, self.send_queue, self.chat_hist], \
-                                                    ["PROJECTILES", "POWERUPS", "PENDING MSGS", "CHAT"])):
+                for i, (item, text) in enumerate(zip([self.projectiles, self.powerups, self.send_queue], \
+                                                    ["PROJECTILES", "POWERUPS", "PENDING MSGS"])):
                     text = font.render(f"CLEAR {text} ({len(item)})", True, (255,255,255))
                     display.blit(text, (400, i*25))
             
@@ -232,7 +227,7 @@ class GameServer:
             conn, addr = self.sock.accept()
             banned = json.load(open("banned.json", "rt"))
             if addr[0] in banned:
-                send(conn, ["BANNED", 1])
+                send(conn, [["EXIT", "BANNED", 1]])
                 print(f"banned ip {addr[0]} tried to join")
                 conn.close()
             else:
@@ -265,7 +260,7 @@ class GameServer:
                             self.chat(f"{name} joined.")
                             print(f"{full_name} joined")
                             if msg[3] != self.VERSION:
-                                send(conn, ["VERSION", self.VERSION])
+                                send(conn, [["EXIT", "VERSION", self.VERSION]])
                         case "INPUT":
                             if name is not None:
                                 x = msg[1]
@@ -276,12 +271,11 @@ class GameServer:
                             self.chat(f"{name}: {msg[1]}")
                         case "UPDATE":
                             data = {"players": [(p[0], p[1].pos) for p in self.players.items()], 
-                                    "chat": self.chat_hist[:30],
                                     "pwups": [pw.pos for pw in self.powerups],
                                     "projs": [list(pr.pos // 1) for pr in self.projectiles],
                                     "plr": plr.__dict__}
 
-                            send(conn, [[k,v] for k, v in data.items()])
+                            send(conn, [["STATE",k,v] for k, v in data.items()])
 
                             for msg in self.send_queue:
                                 if msg[0] == full_name:

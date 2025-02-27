@@ -218,7 +218,7 @@ def send(data):
     t = ExcPropagateThread(target=sock.send, args=[("\n" + json.dumps(data)).encode("utf-8")], daemon=True)
     t.start()
 
-def recieve(output, stop_event: threading.Event):
+def recieve(state_output, event_output, stop_event: threading.Event):
     global error_msg, error_timer
     buffer = bytes()
     while True:
@@ -251,9 +251,16 @@ def recieve(output, stop_event: threading.Event):
                 print("A message from the server couldn't be decoded:")
                 print(item)
                 continue
-            output[msg[0]] = msg[1]
-            if msg[0] in exit_types:
-                return
+
+            match msg[0]:
+                case "STATE":
+                    state_output[msg[1]] = msg[2]
+                case "EVENT":
+                    event_output.append(msg)
+                case "EXIT":
+                    event_output.append(msg)
+                    return
+
         if overflow:
             buffer = buffer.split("\n".encode("utf-8"))[-1]
             # keep partial msg to be completed later
@@ -276,12 +283,13 @@ if __name__ == "__main__":
     config = parser.parse_args()
 
     exit_types = ["BANNED", "KICK", "SHUTDOWN", "VERSION"]
+    exited = [False, ""]
     error_msg = ""
     error_timer = 180
 
     plr = Player(config.name, [960, 540])
     w, h = 1920, 1080
-    display = pg.display.set_mode((w, h), pg.NOFRAME | pg.SCALED)
+    display = pg.display.set_mode((w,h), pg.FULLSCREEN | pg.SCALED)
     clock = pg.time.Clock()
     fonts = {size: pg.font.Font(None, size) for size in [32,48,64]}
     splash = random.choice(open("splash.txt", "rt").readlines())[:-1]
@@ -309,7 +317,7 @@ if __name__ == "__main__":
                               TextDisplay("port_text", (w/2+50, h/3+200), fonts[48], lambda : "", "l", (128,128,128)),
                               f"{config.port}", "pre"),])
 
-    VERSION = 1.2
+    VERSION = 1.3
     BUTTON_PRESSED, BUTTON_RELEASED = pg.event.custom_type(), pg.event.custom_type()
     STATE_CHANGE = pg.event.custom_type()
     TEXT_ENTERED = pg.event.custom_type()
@@ -383,15 +391,15 @@ if __name__ == "__main__":
                             state = "game"
                             pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "menu", "new": "game"}))
 
-                            recieved = {"players": dict(), 
-                                        "chat": [],
+                            game_state = {"players": dict(),
                                         "pwups": [],
                                         "projs": [],
-                                        "plr": None,
-                                        "death": ["", 0]}
+                                        "plr": None}
+                            chat = []
+                            event_queue = []
                             
                             left.clear()
-                            recv_t = ExcPropagateThread(target=recieve, args=[recieved, left], daemon=True)
+                            recv_t = ExcPropagateThread(target=recieve, args=[game_state, event_queue, left], daemon=True)
                             recv_t.start()
                             thread_exc = None
 
@@ -467,6 +475,19 @@ if __name__ == "__main__":
                             game_ui["curr_chat_msg"].text = ""
                 if state != "game": continue
 
+                while event_queue: #type: ignore
+                    #pylance: this is always initialised immediately before state changes to 'game' allowing this to run
+                    event = event_queue.pop(0)
+                    if event[0] == "EVENT":
+                        if event[1] == "DEATH":
+                            for _ in range(50):
+                                particles.append(Particle(dict(players)[event[2]]))
+                        elif event[1] == "CHAT":
+                            chat.insert(0, event[2])
+                    elif event[0] == "EXIT":
+                        exited = [True, event[1:]]
+                        break
+
                 keys = pg.key.get_pressed()
                 if not (chatting or plr.respawn_timer > 0):
                     plr_input = pg.mouse.get_pressed()[0] * 16 + keys[pg.K_w] * 8 + keys[pg.K_a] * 4 + keys[pg.K_s] * 2 + keys[pg.K_d]
@@ -474,32 +495,25 @@ if __name__ == "__main__":
                     plr_input = 0
                 send(["INPUT", plr_input, pg.mouse.get_pos()])
 
-                for exit_type, exit_msg in zip(exit_types, \
-                    ["You are banned from the server.", "You were kicked from the server.", "The server shut down.", "Version mismatch - client {} vs server {}."]):
-                    if exit_type in recieved.keys() and not left.is_set():
-                        left.set()
-                        if exit_type != "BANNED":
-                            send(["QUIT"])
-                        if exit_type == "VERSION":
-                            exit_msg = exit_msg.format(VERSION, recieved.get("VERSION", "unknown"))
-                        error_msg = exit_msg
-                        state = "menu"
-                        pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
-                if state != "game": continue
+                if exited[0]:
+                    exit_msg = {"BANNED": "You are banned from the server.", "KICK": "You were kicked from the server.", "SHUTDOWN": "The server shut down.", "VERSION": "Version mismatch - client {} vs server {}."}[exited[1][0]]
+                    left.set()
+                    if exited[1][0] != "BANNED":
+                        send(["QUIT"])
+                    if exited[1][0] == "VERSION":
+                        exit_msg = exit_msg.format(VERSION, exited[1][1])
+                    error_msg = exit_msg
+                    state = "menu"
+                    pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
+                    continue
                 
-                players = recieved["players"]
-                chat = recieved["chat"]
-                pwups = recieved["pwups"]
-                projs = recieved["projs"]
+                players = game_state["players"]
+                pwups = game_state["pwups"]
+                projs = game_state["projs"]
 
-                if recieved["plr"] is not None:
-                    for key, val in recieved["plr"].items():
+                if game_state["plr"] is not None:
+                    for key, val in game_state["plr"].items():
                         plr.__dict__[key] = val
-
-                if recieved["death"] != last_death:
-                    last_death = recieved["death"]
-                    for _ in range(50):
-                        particles.append(Particle(dict(players)[last_death[0]]))
 
                 for p in particles:
                     if p.tick():
