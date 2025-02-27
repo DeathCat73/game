@@ -169,6 +169,7 @@ class GameServer:
             for pr in self.projectiles:
                 hit = pr.tick(self.players.items())
                 if hit is not None:
+                    self.projectiles.remove(pr)
                     if hit:
                         p = self.players[hit[0]]
                         if p.iframes > 0:
@@ -186,8 +187,7 @@ class GameServer:
                                 p.powerups[pwup] = 0
 
                             for plr in self.players:
-                                self.send_queue.append([plr,["EVENT", "DEATH", p]])
-                    self.projectiles.remove(pr)
+                                self.send_queue.append([plr,["EVENT", "DEATH", p.name]])
 
             for name, p in self.players.items():
                 if p.tick():

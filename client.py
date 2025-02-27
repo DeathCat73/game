@@ -227,7 +227,8 @@ def recieve(state_output, event_output, stop_event: threading.Event):
         
         try:
             data = sock.recv(999999)
-            error_timer = 0
+            if error_msg == "Lost connection":
+                error_msg = "Regained connection"
         except TimeoutError:
             if stop_event.is_set():
                 return
@@ -476,7 +477,7 @@ if __name__ == "__main__":
                 if state != "game": continue
 
                 while event_queue: #type: ignore
-                    #pylance: this is always initialised immediately before state changes to 'game' allowing this to run
+                    #pylance: event_queue is always initialised immediately before state changes to 'game' allowing this to run
                     event = event_queue.pop(0)
                     if event[0] == "EVENT":
                         if event[1] == "DEATH":
