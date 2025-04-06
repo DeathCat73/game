@@ -26,7 +26,7 @@ Close the console in any way to close the server.
 Click on player names on the left to kick them.  
 - The server name is not a player.  
 
-Click on text on the right to clear lists if they get too big.  
+Click on text on the right to clear certain lists if they get too big.  
 To close the server, close the window:  
 - A warning will be sent in the server's chat immediately  
 - After 1 second, the game logic will stop and all players will be kicked  

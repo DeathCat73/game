@@ -263,6 +263,8 @@ class GameServer:
                             return
                         case "JOIN":
                             name = msg[1]
+                            if len(name) > 20:
+                                send(conn, [["EXIT", "NAME"]])
                             full_name = f"{addr[0]}:{addr[1]}:{name}"
                             plr = Player(full_name, [960,540])
                             self.players[full_name] = plr

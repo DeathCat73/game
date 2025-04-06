@@ -448,7 +448,11 @@ if __name__ == "__main__":
 
                 config.name = main_menu["username"].text
                 if config.name:
-                    plr.name = config.name
+                    if len(config.name) > 20:
+                        error_msg = "Username too long"
+                        error_timer = 50
+                    else:
+                        plr.name = config.name
                 else:
                     error_msg = "Please enter a username"
                     error_timer = 50
@@ -571,6 +575,9 @@ if __name__ == "__main__":
                     if p.tick():
                         particles.remove(p)
 
+                game_ui["error"].col = (min(error_timer*4, 255), 0, 0)
+                game_ui["error"].draw(display)
+
                 chat_timer = max(chat_timer-1, chatting*180)
                 error_timer = max(error_timer-1, 0)
                 if chatting:
@@ -611,9 +618,6 @@ if __name__ == "__main__":
 
                 for pr in projs:
                     pg.draw.rect(display, (255,)*3, [pr[0]-5,pr[1]-5,10,10])
-
-                game_ui["error"].col = (min(error_timer*4, 255), 0, 0)
-                game_ui["error"].draw(display)
 
         pg.display.update()
         clock.tick(fps)
