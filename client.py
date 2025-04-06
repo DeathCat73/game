@@ -289,7 +289,7 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=38491)
     config = parser.parse_args()
 
-    exit_types = ["BANNED", "KICK", "SHUTDOWN", "VERSION"]
+    exit_types = ["BANNED", "KICK", "SHUTDOWN", "VERSION", "NAME"]
     exited = [False, ""]
     error_msg = ""
     error_timer = 180
@@ -445,6 +445,14 @@ if __name__ == "__main__":
                         error_timer = 120
                         plr.name = config.name
                         left.clear()
+                        chat = []
+                        particles = []
+                        game_state = {"info": dict(),
+                                    "players": dict(),
+                                    "pwups": [],
+                                    "projs": [],
+                                    "plr": None}
+                        exited = [False, []]
 
                 config.name = main_menu["username"].text
                 if config.name:
@@ -552,7 +560,11 @@ if __name__ == "__main__":
                 send(["INPUT", plr_input, pg.mouse.get_pos()])
 
                 if exited[0]:
-                    exit_msg = {"BANNED": "You are banned from the server.", "KICK": "You were kicked from the server.", "SHUTDOWN": "The server shut down.", "VERSION": "Version mismatch - client {} vs server {}."}[exited[1][0]]
+                    exit_msg = {"BANNED": "You are banned from the server.", 
+                                "KICK": "You were kicked from the server.", 
+                                "SHUTDOWN": "The server shut down.", 
+                                "VERSION": "Version mismatch - client {} vs server {}.",
+                                "NAME": "Invalid name."}[exited[1][0]]
                     left.set()
                     if exited[1][0] != "BANNED":
                         send(["QUIT"])
@@ -582,7 +594,7 @@ if __name__ == "__main__":
                 error_timer = max(error_timer-1, 0)
                 if chatting:
                     game_ui["curr_chat_msg"].draw(display)
-                for i, m in enumerate(chat):
+                for i, m in enumerate(chat[:40]):
                     if i >= 3 and chat_timer == 0: break
                     TextDisplay(f"chat-{i}", (10, h-30*(i+2)), fonts[32], lambda : m, "l", (255 if i < 3 else min(chat_timer*2,255),)*3).draw(display)
 

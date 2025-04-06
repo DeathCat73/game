@@ -292,6 +292,9 @@ class GameServer:
                                 if msg[0] == full_name:
                                     send(conn, [msg[1]])
                                     self.send_queue.remove(msg)
+                                    if msg[1][0] == "EXIT":
+                                        time.sleep(0.5)
+                                        exited = True
                         case "QUIT":
                             # break while from within nested for
                             exited = True
