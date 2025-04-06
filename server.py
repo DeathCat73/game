@@ -309,12 +309,14 @@ class GameServer:
                 # no QUIT message
                 if name is not None:
                     self.players.pop(full_name)
+                    self.projectiles = [p for p in self.projectiles if p.shooter != full_name]
                     self.chat(f"{name} left.")
                     print(f"{full_name} disconnected suddenly")
                 return
         
         if name is not None:
             self.players.pop(full_name)
+            self.projectiles = [p for p in self.projectiles if p.shooter != full_name]
             self.chat(f"{name} left.")
             print(f"{full_name} disconnected")
         conn.close()

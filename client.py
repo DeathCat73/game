@@ -501,7 +501,8 @@ if __name__ == "__main__":
                 if thread_exc:
                     if type(thread_exc) in (ConnectionAbortedError, ConnectionResetError, OSError):
                         left.set()
-                        error_msg = "You disconnected from the server."
+                        error_msg = "You disconnected from the server or it suddenly closed."
+                        error_timer = 120
                         state = "menu"
                         pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
                         thread_exc = None
