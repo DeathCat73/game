@@ -107,7 +107,8 @@ def send(conn, msgs):
 
 class GameServer:
     def __init__(self, name="server", port=38491):
-        self.VERSION = 1.3
+        self.VERSION = 1.31
+        self.allowed_versions = [1.3]
         self.name = name
         self.threads = []
         self.sock = socket.create_server(("", port))
@@ -228,7 +229,7 @@ class GameServer:
             banned = json.load(open("banned.json", "rt"))
             if addr[0] in banned:
                 send(conn, [["EXIT", "BANNED", 1]])
-                print(f"banned ip {addr[0]} tried to join")
+                print(f"banned IP {addr[0]} tried to connect")
                 conn.close()
             else:
                 self.threads.append(threading.Thread(target=self.serve, args=(conn, addr), daemon=True))
@@ -252,6 +253,14 @@ class GameServer:
                     if not item: continue
                     msg = json.loads(item)
                     match msg[0]:
+                        case "INFO":
+                            data = {"timestamp": msg[1],
+                                    "name": self.name,
+                                    "version": self.VERSION,
+                                    "players": len(self.players),
+                                    "ping": -1}
+                            send(conn, [["INFO", k, v] for k, v in data.items()])
+                            return
                         case "JOIN":
                             name = msg[1]
                             full_name = f"{addr[0]}:{addr[1]}:{name}"
@@ -259,7 +268,7 @@ class GameServer:
                             self.players[full_name] = plr
                             self.chat(f"{name} joined.")
                             print(f"{full_name} joined")
-                            if msg[3] != self.VERSION:
+                            if msg[3] != self.VERSION and msg[3] not in self.allowed_versions:
                                 send(conn, [["EXIT", "VERSION", self.VERSION]])
                         case "INPUT":
                             if name is not None:
@@ -293,14 +302,16 @@ class GameServer:
 
             except ConnectionResetError:
                 # no QUIT message
-                self.players.pop(full_name)
-                self.chat(f"{name} left.")
-                print(f"{full_name} disconnected suddenly")
+                if name is not None:
+                    self.players.pop(full_name)
+                    self.chat(f"{name} left.")
+                    print(f"{full_name} disconnected suddenly")
                 return
-            
-        self.players.pop(full_name)
-        self.chat(f"{name} left.")
-        print(f"{full_name} disconnected")
+        
+        if name is not None:
+            self.players.pop(full_name)
+            self.chat(f"{name} left.")
+            print(f"{full_name} disconnected")
         conn.close()
 
 
