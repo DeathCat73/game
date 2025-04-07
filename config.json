@@ -1,0 +1,9 @@
+{
+    "name": "server",
+    "port": 38491,
+    "admins": [
+        "127.0.0.1"
+    ],
+    "banned": [],
+    "max_pwups": 16
+}

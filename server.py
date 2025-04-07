@@ -116,19 +116,72 @@ class GameServer:
         self.projectiles = []
         self.powerups = []
         self.send_queue = []
+        self.tps = 0
 
-    def chat(self, msg):
-        print(msg)
+    def process_command(self, command, sender, share_output=False):
+        match command[0].lower():
+            case "tps":
+                if share_output:
+                    self.chat(str(self.tps), sender)
+                else:
+                    self.send_queue.append([sender, ["EVENT", "CHAT", str(self.tps)]])
+            case "kick":
+                target = command[1]
+                print(f"-{target}-")
+                kick_all = len(command) >= 3 and command[2].lower() == "all"
+                targets = [p for p in self.players.keys() if username(p) == target]
+                print(targets)
+                print(*[p for p in self.players.keys()])
+                if targets:
+                    if share_output: self.chat(f"{target} was kicked.")
+                    self.send_queue.append([targets[0], ["EXIT", "KICK", 1]])
+                    if kick_all:
+                        for t in targets[1:]:
+                            if share_output: self.chat(f"{target} was kicked.")
+                            self.send_queue.append([t, ["EXIT", "KICK", 1]])
+            case "ban":
+                target = command[1]
+                ban_all = len(command) >= 3 and command[2].lower() == "all"
+                targets = [p for p in self.players.keys() if username(p) == target]
+                if targets:
+                    if share_output: self.chat(f"{target} was banned.")
+                    self.send_queue.append([targets[0], ["EXIT", "KICK", 1]])
+                    config["banned"].append(targets[0][:targets[0].find(":")])
+                    if ban_all:
+                        for t in targets[1:]:
+                            if share_output: self.chat(f"{target} was banned.")
+                            self.send_queue.append([t, ["EXIT", "KICK", 1]])
+                            config["banned"].append(t[:t.find(":")])
+            case "stop":
+                pg.event.post(pg.event.Event(pg.QUIT))
+            case "save":
+                with open("config.json", "wt") as f:
+                    json.dump(config, f, indent=4)
+
+
+    def chat(self, msg, sender=None):
+        global config
+
+        print(f"{sender if sender is not None else ''}: {msg}")
+
+        if sender is not None:
+            if sender[:sender.find(":")] in config["admins"]:
+                if msg[0] == "\\":
+                    for p in self.players:
+                        self.send_queue.append([p, ["EVENT", "CHAT", f"{username(sender)}:: {msg}"]])
+                if msg[0] in "/\\":
+                    self.process_command(msg[1:].split(" "), sender, msg[0] == "\\")
+                    return
+
         for p in self.players:
-            self.send_queue.append([p, ["EVENT", "CHAT", msg]])
+            self.send_queue.append([p, ["EVENT", "CHAT", f"{(username(sender) + ': ') if sender is not None else ''}{msg}"]])
 
     def run_game(self, gui=False):
         pg.init()
         if gui:
             display = pg.display.set_mode((800, 400))
             font = pg.font.Font(None, 32)
-            tps = 0
-            timer = time.perf_counter()
+        timer = time.perf_counter()
         ticks = 0
         clock = pg.time.Clock()
         t = 0
@@ -136,28 +189,28 @@ class GameServer:
         while True:
             if gui: display.fill(0)
 
-            if gui:
-                for event in pg.event.get():
-                    if event.type == pg.QUIT:
-                        self.chat("! STOPPING !")
-                        pg.quit()
-                        time.sleep(1)
-                        for plr in self.players:
-                            self.send_queue.append([plr, ["EXIT", "SHUTDOWN", 1]])
-                        print("game stopped")
-                        return
-                    elif event.type == pg.MOUSEBUTTONDOWN:
-                        pos = pg.mouse.get_pos()
-                        try:
-                            if pos[0] < 400 and pos[1] >= 50:
-                                plr = list(self.players.keys())[pos[1]//25-2]
-                                if event.button == 1:
-                                    self.chat(f"{username(plr)} was kicked.")
-                                    self.send_queue.append([plr, ["EXIT", "KICK", 1]])
-                            else:
-                                [self.projectiles, self.powerups, self.send_queue][pos[1]//25].clear()
-                        except IndexError:
-                            pass
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    self.chat("! STOPPING !")
+                    pg.quit()
+                    time.sleep(1)
+                    for plr in self.players:
+                        self.send_queue.append([plr, ["EXIT", "SHUTDOWN", 1]])
+                    self.process_command(["save"], "Server")
+                    print("game stopped")
+                    return
+                elif event.type == pg.MOUSEBUTTONDOWN and gui:
+                    pos = pg.mouse.get_pos()
+                    try:
+                        if pos[0] < 400 and pos[1] >= 50:
+                            plr = list(self.players.keys())[pos[1]//25-2]
+                            if event.button == 1:
+                                self.chat(f"{username(plr)} was kicked.")
+                                self.send_queue.append([plr, ["EXIT", "KICK", 1]])
+                        else:
+                            [self.projectiles, self.powerups, self.send_queue][pos[1]//25].clear()
+                    except IndexError:
+                        pass
 
             for pw in self.powerups:
                 for name, plr in self.players.items():
@@ -165,7 +218,7 @@ class GameServer:
                         self.players[name].powerups[pw.type] = 300
                         self.powerups.remove(pw)
                         break
-            if random.random() < 0.001 and len(self.powerups) < 16:
+            if random.random() < 0.001 and len(self.powerups) < config["max_pwups"]:
                 self.powerups.append(Powerup())
             for pr in self.projectiles:
                 hit = pr.tick(self.players.items())
@@ -196,13 +249,16 @@ class GameServer:
                     if p.powerups["triple"] > 0:
                         self.projectiles.append(Projectile(p.pos, name, np.array(p.mouse_pos) + [random.random()*100, random.random()*100] - p.pos - (50,50)))
                         self.projectiles.append(Projectile(p.pos, name, np.array(p.mouse_pos) + [random.random()*100, random.random()*100] - p.pos - (50,50)))
+                    
+            if ticks == 30:
+                ticks = 0
+                self.tps = 30 / (time.perf_counter() - timer)
+                timer = time.perf_counter()
+                if not t%600:
+                    self.process_command(["save"], "Server")
 
             if gui:
-                if ticks == 30:
-                    ticks = 0
-                    tps = 30 / (time.perf_counter() - timer)
-                    timer = time.perf_counter()
-                text = font.render(f"{self.name}: {round(tps, 2)} TPS", True, (255,255*(tps>59),255*(tps>59)))
+                text = font.render(f"{self.name}: {round(self.tps, 2)} TPS", True, (255,255*(self.tps>59),255*(self.tps>59)))
                 display.blit(text, (0,0))
 
                 pg.draw.line(display, (128,128,128), (395, 0), (395, 400), 5)
@@ -216,8 +272,8 @@ class GameServer:
                     display.blit(text, (400, i*25))
             
             t += 1
+            ticks += 1
             if gui:
-                ticks += 1
                 pg.display.update()
             clock.tick(60)
 
@@ -226,7 +282,7 @@ class GameServer:
         print(f"server {self.name} started on {ip}:{port}")
         while True:
             conn, addr = self.sock.accept()
-            banned = json.load(open("banned.json", "rt"))
+            banned = config["banned"]
             if addr[0] in banned:
                 send(conn, [["EXIT", "BANNED", 1]])
                 print(f"banned IP {addr[0]} tried to connect")
@@ -239,6 +295,7 @@ class GameServer:
         name = None
         buffer = bytes()
         exited = False
+
         while not exited:
             try:
                 data = conn.recv(4096)
@@ -269,7 +326,6 @@ class GameServer:
                             plr = Player(full_name, [960,540])
                             self.players[full_name] = plr
                             self.chat(f"{name} joined.")
-                            print(f"{full_name} joined")
                             if msg[3] != self.VERSION and msg[3] not in self.allowed_versions:
                                 send(conn, [["EXIT", "VERSION", self.VERSION]])
                         case "INPUT":
@@ -279,7 +335,7 @@ class GameServer:
                                 plr.mvmt = x % 16
                                 plr.mouse_pos = msg[2]
                         case "CHAT":
-                            self.chat(f"{name}: {msg[1]}")
+                            self.chat(msg[1], full_name)
                         case "UPDATE":
                             data = {"players": [(p[0], p[1].pos) for p in self.players.items()], 
                                     "pwups": [pw.pos for pw in self.powerups],
@@ -318,15 +374,15 @@ class GameServer:
             self.players.pop(full_name)
             self.projectiles = [p for p in self.projectiles if p.shooter != full_name]
             self.chat(f"{name} left.")
-            print(f"{full_name} disconnected")
         conn.close()
 
 
 if __name__ == "__main__":
+    config = json.load(open("config.json"))
     parser = argparse.ArgumentParser()
     parser.add_argument("--gui", const=True, nargs="?")
-    parser.add_argument("--name", type=str, default="server")
-    parser.add_argument("--port", type=int, default=38491)
+    parser.add_argument("--name", type=str, default=config["name"])
+    parser.add_argument("--port", type=int, default=config["port"])
     args = parser.parse_args()
     server = GameServer(args.name, args.port)
     serv_t = threading.Thread(target=server.run_server, daemon=True)

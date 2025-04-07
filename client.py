@@ -525,6 +525,12 @@ if __name__ == "__main__":
                                 game_ui["curr_chat_msg"].input(event)
                         elif event.key == pg.K_t:
                             chatting = True
+                        elif event.key == pg.K_SLASH:
+                            chatting = True
+                            game_ui["curr_chat_msg"].text = "/"
+                        elif event.key == pg.K_BACKSLASH:
+                            chatting = True
+                            game_ui["curr_chat_msg"].text = "\\"
                         elif event.key == pg.K_ESCAPE:
                             left.set()
                             send(["QUIT"])
