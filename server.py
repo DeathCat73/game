@@ -7,6 +7,7 @@ import math
 import numpy as np
 import time
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 
 
 class Player:
@@ -31,6 +32,12 @@ class Player:
     @property
     def rect(self):
         return pg.Rect(self.pos[0]-20, self.pos[1]-20, 40, 40)
+    
+    @property
+    def data_encoded_pos(self):
+        #odd x -> iframes, odd y -> dead
+        return [self.pos[0] // 2 * 2 + (self.iframes > 0),
+                self.pos[1] // 2 * 2 + (self.respawn_timer > 0)]
     
     def tick(self):
         self.respawn_timer -= 1
@@ -97,21 +104,22 @@ def username(name: str):
     return name[i2+1:]
 
 
-def send(conn, msgs):
+def send(conn, msgs, executor):
     data = ""
     for m in msgs:
         data += "\n"+json.dumps(m)
-    t = threading.Thread(target=conn.sendall, args=[data.encode("utf-8")], daemon=True)
-    t.start()
+    executor.submit(conn.sendall, data.encode("utf-8"))
+    
 
 
 class GameServer:
     def __init__(self, name="server", port=38491):
-        self.VERSION = 1.31
-        self.allowed_versions = [1.3]
+        self.VERSION = 1.32
+        self.allowed_versions = [1.31, 1.3]
         self.name = name
         self.threads = []
         self.sock = socket.create_server(("", port))
+        self.executor = ThreadPoolExecutor()
         self.players = dict()
         self.projectiles = []
         self.powerups = []
@@ -127,10 +135,8 @@ class GameServer:
                     self.send_queue.append([sender, ["EVENT", "CHAT", str(self.tps)]])
             case "kick":
                 target = command[1]
-                print(f"-{target}-")
                 kick_all = len(command) >= 3 and command[2].lower() == "all"
                 targets = [p for p in self.players.keys() if username(p) == target]
-                print(targets)
                 print(*[p for p in self.players.keys()])
                 if targets:
                     if share_output: self.chat(f"{target} was kicked.")
@@ -284,7 +290,7 @@ class GameServer:
             conn, addr = self.sock.accept()
             banned = config["banned"]
             if addr[0] in banned:
-                send(conn, [["EXIT", "BANNED", 1]])
+                send(conn, [["EXIT", "BANNED", 1]], self.executor)
                 print(f"banned IP {addr[0]} tried to connect")
                 conn.close()
             else:
@@ -295,6 +301,7 @@ class GameServer:
         name = None
         buffer = bytes()
         exited = False
+        last_communication = time.time()
 
         while not exited:
             try:
@@ -308,6 +315,7 @@ class GameServer:
                     items = items[:-1]
                 for item in items:
                     if not item: continue
+                    last_communication = time.time()
                     msg = json.loads(item)
                     match msg[0]:
                         case "INFO":
@@ -316,18 +324,18 @@ class GameServer:
                                     "version": self.VERSION,
                                     "players": len(self.players),
                                     "ping": -1}
-                            send(conn, [["INFO", k, v] for k, v in data.items()])
+                            send(conn, [["INFO", k, v] for k, v in data.items()], self.executor)
                             return
                         case "JOIN":
                             name = msg[1]
                             if len(name) > 20:
-                                send(conn, [["EXIT", "NAME"]])
+                                send(conn, [["EXIT", "NAME"]], self.executor)
                             full_name = f"{addr[0]}:{addr[1]}:{name}"
                             plr = Player(full_name, [960,540])
                             self.players[full_name] = plr
                             self.chat(f"{name} joined.")
                             if msg[3] != self.VERSION and msg[3] not in self.allowed_versions:
-                                send(conn, [["EXIT", "VERSION", self.VERSION]])
+                                send(conn, [["EXIT", "VERSION", self.VERSION]], self.executor)
                         case "INPUT":
                             if name is not None:
                                 x = msg[1]
@@ -337,16 +345,16 @@ class GameServer:
                         case "CHAT":
                             self.chat(msg[1], full_name)
                         case "UPDATE":
-                            data = {"players": [(p[0], p[1].pos) for p in self.players.items()], 
+                            data = {"players": [(p[0], p[1].data_encoded_pos) for p in self.players.items()], 
                                     "pwups": [pw.pos for pw in self.powerups],
                                     "projs": [list(pr.pos // 1) for pr in self.projectiles],
                                     "plr": plr.__dict__}
 
-                            send(conn, [["STATE",k,v] for k, v in data.items()])
+                            send(conn, [["STATE",k,v] for k, v in data.items()], self.executor)
 
                             for msg in self.send_queue:
                                 if msg[0] == full_name:
-                                    send(conn, [msg[1]])
+                                    send(conn, [msg[1]], self.executor)
                                     self.send_queue.remove(msg)
                                     if msg[1][0] == "EXIT":
                                         time.sleep(0.5)
@@ -369,6 +377,11 @@ class GameServer:
                     self.chat(f"{name} left.")
                     print(f"{full_name} disconnected suddenly")
                 return
+            
+            if time.time() - last_communication > 5:
+                # prevent ghost players after particularly annoying errors
+                print(f"{full_name} stopped communicating")
+                exited = True
         
         if name is not None:
             self.players.pop(full_name)

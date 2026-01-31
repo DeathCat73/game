@@ -8,6 +8,7 @@ import numpy as np
 import random
 import argparse
 import math
+import concurrent.futures
 
 pg.init()
 
@@ -213,9 +214,8 @@ class ExcPropagateThread(threading.Thread):
         return self.ret
     
 
-def send(data):
-    t = ExcPropagateThread(target=sock.send, args=[("\n" + json.dumps(data)).encode("utf-8")], daemon=True)
-    t.start()
+def send(sock, data, executor):
+    return executor.submit(sock.send, ("\n" + json.dumps(data)).encode("utf-8"))
 
 def recieve(state_output, event_output, stop_event: threading.Event):
     global error_msg, error_timer
@@ -295,12 +295,15 @@ if __name__ == "__main__":
     error_timer = 180
 
     sock = None
+    executor = concurrent.futures.ThreadPoolExecutor()
+    running_futures = []
     plr = Player(config.name, [960, 540])
     w, h = 1920, 1080
     display = pg.display.set_mode((w,h), pg.FULLSCREEN | pg.SCALED)
     clock = pg.time.Clock()
     fonts = {size: pg.font.Font(None, size) for size in [32,48,64]}
-    splash = random.choice(open("splash.txt", "rt").readlines())[:-1]
+    splashes = open("splash.txt", "rt").readlines()
+    splash = random.choice(splashes)[:-1]
     game_state = {"info": dict(),
                   "players": dict(),
                   "pwups": [],
@@ -398,7 +401,8 @@ if __name__ == "__main__":
                     elif event.type == BUTTON_RELEASED:
                         if event.button == "info":
                             if sock is not None:
-                                send(["QUIT"])
+                                f = send(sock, ["QUIT"], executor)
+                                f.result()
                                 sock.close()
                                 sock = None
 
@@ -409,13 +413,17 @@ if __name__ == "__main__":
                                 error_timer = 120
                                 continue
 
-                            send(["INFO", time.time()])
+                            running_futures.append(send(sock, ["INFO", time.time()], executor))
                             recv_t = ExcPropagateThread(target=recieve, args=[game_state, event_queue, left], daemon=True)
                             recv_t.start()
 
                         elif event.button == "play":
                             if sock is not None:
-                                send(["QUIT"])
+                                f = send(sock, ["QUIT"], executor)
+                                try:
+                                    f.result()
+                                except (ConnectionResetError, ConnectionAbortedError, OSError):
+                                    pass
                                 sock.close()
                                 sock = None
 
@@ -440,7 +448,7 @@ if __name__ == "__main__":
                             recv_t.start()
                             thread_exc = None
 
-                            send(["JOIN", plr.name, plr.pos, VERSION])
+                            running_futures.append(send(sock, ["JOIN", plr.name, plr.pos, VERSION], executor))
                     elif event.type == STATE_CHANGE:
                         error_timer = 120
                         plr.name = config.name
@@ -453,6 +461,7 @@ if __name__ == "__main__":
                                     "projs": [],
                                     "plr": None}
                         exited = [False, []]
+                        splash = random.choice(splashes)[:-1]
 
                 config.name = main_menu["username"].text
                 if config.name:
@@ -496,23 +505,26 @@ if __name__ == "__main__":
             case "game":
                 t = time.perf_counter()
 
-                send(["UPDATE"])
+                running_futures.append(send(sock, ["UPDATE"], executor))
 
-                if thread_exc:
-                    if type(thread_exc) in (ConnectionAbortedError, ConnectionResetError, OSError):
-                        left.set()
-                        error_msg = "You disconnected from the server or it suddenly closed."
-                        error_timer = 120
-                        state = "menu"
-                        pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
-                        thread_exc = None
-                    else:
-                        raise thread_exc
+                for f in running_futures:
+                    if f.done():
+                        try:
+                            f.result()
+                            running_futures.remove(f)
+                        except (ConnectionAbortedError, ConnectionResetError, OSError) as e:
+                            left.set()
+                            error_msg = "You disconnected from the server or it suddenly closed."
+                            error_timer = 120
+                            state = "menu"
+                            pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
+                            running_futures = []
+                            break
 
                 for event in pg.event.get():
                     if event.type == pg.QUIT:
                         left.set()
-                        send(["QUIT"])
+                        running_futures.append(send(sock, ["QUIT"], executor))
                         error_msg = "You left the server."
                         state = "menu"
                         pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
@@ -533,7 +545,7 @@ if __name__ == "__main__":
                             game_ui["curr_chat_msg"].text = "\\"
                         elif event.key == pg.K_ESCAPE:
                             left.set()
-                            send(["QUIT"])
+                            running_futures.append(send(sock, ["QUIT"], executor))
                             error_msg = "You left the server."
                             state = "menu"
                             pg.event.post(pg.event.Event(STATE_CHANGE, {"old": "game", "new": "menu"}))
@@ -541,7 +553,7 @@ if __name__ == "__main__":
                         if event.field == "curr_chat_msg":
                             chatting = False
                             if game_ui["curr_chat_msg"].text != "":
-                                send(["CHAT", game_ui["curr_chat_msg"].text])
+                                running_futures.append(send(sock, ["CHAT", game_ui["curr_chat_msg"].text], executor))
                                 game_ui["curr_chat_msg"].text = ""
                 if state != "game": continue
 
@@ -564,7 +576,7 @@ if __name__ == "__main__":
                     plr_input = pg.mouse.get_pressed()[0] * 16 + keys[pg.K_w] * 8 + keys[pg.K_a] * 4 + keys[pg.K_s] * 2 + keys[pg.K_d]
                 else:
                     plr_input = 0
-                send(["INPUT", plr_input, pg.mouse.get_pos()])
+                running_futures.append(send(sock, ["INPUT", plr_input, pg.mouse.get_pos()], executor))
 
                 if exited[0]:
                     exit_msg = {"BANNED": "You are banned from the server.", 
@@ -574,7 +586,7 @@ if __name__ == "__main__":
                                 "NAME": "Invalid name."}[exited[1][0]]
                     left.set()
                     if exited[1][0] != "BANNED":
-                        send(["QUIT"])
+                        running_futures.append(send(sock, ["QUIT"], executor))
                     if exited[1][0] == "VERSION":
                         exit_msg = exit_msg.format(VERSION, exited[1][1])
                     error_msg = exit_msg
@@ -597,13 +609,13 @@ if __name__ == "__main__":
                 game_ui["error"].col = (min(error_timer*4, 255), 0, 0)
                 game_ui["error"].draw(display)
 
-                chat_timer = max(chat_timer-1, chatting*180)
+                chat_timer = max(chat_timer-1, chatting*64)
                 error_timer = max(error_timer-1, 0)
                 if chatting:
                     game_ui["curr_chat_msg"].draw(display)
                 for i, m in enumerate(chat[:40]):
                     if i >= 3 and chat_timer == 0: break
-                    TextDisplay(f"chat-{i}", (10, h-30*(i+2)), fonts[32], lambda : m, "l", (255 if i < 3 else min(chat_timer*2,255),)*3).draw(display)
+                    TextDisplay(f"chat-{i}", (10, h-30*(i+2)), fonts[32], lambda : m, "l", (255 if i < 3 else min(chat_timer*4,255),)*3).draw(display)
 
                 for (pw, timer), text in zip(plr.powerups.items(), [game_ui[x] for x in ["rapid", "triple", "speed"]]):
                     if timer > 0:
@@ -625,10 +637,14 @@ if __name__ == "__main__":
 
                 for p in players:
                     name = p[0]
-                    col = (255,0,0)
+                    if p[1][1] % 2:
+                        col = (64,0,0)
+                    elif p[1][0] % 2:
+                        col = (128,0,0)
+                    else:
+                        col = (255,0,0)
                     if name == plr.name:
-                        col = (0,127*(1+(plr.iframes<=0)),0)
-                        p[1] = plr.pos
+                        col = (0,col[0],0)
                     pg.draw.rect(display, col, [p[1][0]-20, p[1][1]-20, 40, 40])
                     TextDisplay(f"nametag-{name}", (p[1][0], p[1][1]-50), fonts[32], lambda: username(name), "c").draw(display)
 

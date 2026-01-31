@@ -6,3 +6,4 @@ Also try server.py!
 Scaled by 1.1-0.1*abs(sin(t*5))!
 No anti-aliasing!
 Non-1080p looks terrible!
+Sensible number of threads!
