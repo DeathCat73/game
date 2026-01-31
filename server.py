@@ -374,6 +374,7 @@ class GameServer:
                 if name is not None:
                     self.players.pop(full_name)
                     self.projectiles = [p for p in self.projectiles if p.shooter != full_name]
+                    self.send_queue = [msg for msg in self.send_queue if msg[0] != full_name]
                     self.chat(f"{name} left.")
                     print(f"{full_name} disconnected suddenly")
                 return
@@ -386,6 +387,7 @@ class GameServer:
         if name is not None:
             self.players.pop(full_name)
             self.projectiles = [p for p in self.projectiles if p.shooter != full_name]
+            self.send_queue = [msg for msg in self.send_queue if msg[0] != full_name]
             self.chat(f"{name} left.")
         conn.close()
 

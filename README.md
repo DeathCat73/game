@@ -7,7 +7,7 @@ Have **banned.json** in the same folder as **server.py**
 **banned.json** should be a list of IPs to block  
 Run `python3 server.py (--gui) --name [name = 'server'] --port [port = 38491]` 
 - `--gui`: Opens a window containing some controls. 
-- `--name`: Names the server. Doesn't do much (yet). 
+- `--name`: Names the server. Can be seen by the client and in the GUI. 
 - `--port`: Changes the port from the default 38491
 The server will then start on the specified port  
 
